@@ -1,26 +1,251 @@
 // ==UserScript==
 // @name         OptimizedStash
-// @version      2.2.0
-// @description  Smart Stash Scene Automation - Auto-detects scraped sources, prevents button reappearance, enhanced organized detection
+// @version      3.3.8-debug
+// @description  Advanced Stash Scene Automation - Fixed minimize button functionality in full panel
 // @author       You
 // @match        http://localhost:9998/scenes/*
 // @exclude      http://localhost:9998/scenes/markers?*
-// @grant        none
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_deleteValue
+// @grant        GM_notification
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    console.log('🚀 AutomateStash v2.2.0 - Smart automation with completion tracking');
-    console.log('🔧 New features: Button reappearance prevention, enhanced organized detection');
+    console.log('🚀 AutomateStash v3.3.8-debug - Fixed minimize button functionality in full panel');
+    console.log('🔧 Fixed: Minimize button in full panel now properly bound to UIManager context');
+    console.log('🔧 Fixed: Added debugging for minimize button click to identify context issues');
+
+    // Configuration Management System
+    const CONFIG_KEYS = {
+        AUTO_SCRAPE_STASHDB: 'autoScrapeStashDB',
+        AUTO_SCRAPE_THEPORNDB: 'autoScrapeThePornDB',
+        AUTO_ORGANIZE: 'autoOrganize',
+        SHOW_NOTIFICATIONS: 'showNotifications',
+        MINIMIZE_WHEN_COMPLETE: 'minimizeWhenComplete',
+        AUTO_APPLY_CHANGES: 'autoApplyChanges',
+        SKIP_ALREADY_SCRAPED: 'skipAlreadyScraped',
+        SCRAPER_DELAYS: 'scraperDelays'
+    };
+
+    // Default configuration
+    const DEFAULT_CONFIG = {
+        [CONFIG_KEYS.AUTO_SCRAPE_STASHDB]: true,
+        [CONFIG_KEYS.AUTO_SCRAPE_THEPORNDB]: true,
+        [CONFIG_KEYS.AUTO_ORGANIZE]: true,
+        [CONFIG_KEYS.SHOW_NOTIFICATIONS]: true,
+        [CONFIG_KEYS.MINIMIZE_WHEN_COMPLETE]: true,
+        [CONFIG_KEYS.AUTO_APPLY_CHANGES]: false, // Require user confirmation by default
+        [CONFIG_KEYS.SKIP_ALREADY_SCRAPED]: true,
+        [CONFIG_KEYS.SCRAPER_DELAYS]: {
+            reaction: 200,
+            graphql: 500,
+            ui: 300,
+            scraper: 1000
+        }
+    };
+
+    // Configuration helper functions
+    function getConfig(key) {
+        try {
+            const value = GM_getValue(key);
+            if (value === undefined) {
+                return DEFAULT_CONFIG[key];
+            }
+            return typeof DEFAULT_CONFIG[key] === 'object' ? JSON.parse(value) : value;
+        } catch (error) {
+            console.warn(`Config error for ${key}:`, error);
+            return DEFAULT_CONFIG[key];
+        }
+    }
+
+    function setConfig(key, value) {
+        try {
+            const serialized = typeof value === 'object' ? JSON.stringify(value) : value;
+            GM_setValue(key, serialized);
+        } catch (error) {
+            console.error(`Failed to save config ${key}:`, error);
+        }
+    }
+
+    // Notification System
+    class NotificationManager {
+        constructor() {
+            this.enabled = getConfig(CONFIG_KEYS.SHOW_NOTIFICATIONS);
+            this.notifications = [];
+            this.notificationStack = 200; // Start position further down to avoid automation widget
+            this.shownMessages = new Set(); // Track already shown persistent messages
+        }
+
+        show(message, type = 'info', duration = 4000, persistent = false) {
+            if (!this.enabled) return;
+
+            // For persistent messages, check if already shown
+            if (persistent) {
+                const messageKey = `${type}:${message}`;
+                if (this.shownMessages.has(messageKey)) {
+                    return; // Don't show the same persistent message again
+                }
+                this.shownMessages.add(messageKey);
+                duration = 0; // Persistent messages don't auto-remove
+            }
+
+            const notification = this.createNotification(message, type, duration, persistent);
+            this.notifications.push(notification);
+            
+            // Auto-remove after duration (only for non-persistent)
+            if (duration > 0) {
+                setTimeout(() => {
+                    this.remove(notification);
+                }, duration);
+            }
+
+            // Only use in-website notifications, no browser notifications
+        }
+
+        createNotification(message, type, duration, persistent = false) {
+            const notification = document.createElement('div');
+            notification.className = `stash-notification notification-${type}`;
+            
+            const colors = {
+                success: '#28a745',
+                error: '#dc3545',
+                warning: '#ffc107',
+                info: '#17a2b8'
+            };
+
+            // Calculate position to prevent overlapping
+            const topPosition = this.notificationStack;
+            this.notificationStack += 80; // Space between notifications
+
+            // Different styling for persistent messages
+            const borderStyle = persistent ? '3px solid rgba(255,255,255,0.8)' : 'none';
+            const pulseAnimation = persistent ? 'pulse 2s infinite' : 'none';
+
+            notification.style.cssText = `
+                position: fixed;
+                top: ${topPosition}px;
+                right: 20px;
+                z-index: 10001;
+                background: ${colors[type] || colors.info};
+                color: white;
+                padding: 15px 20px;
+                border-radius: 8px;
+                max-width: 400px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 14px;
+                line-height: 1.4;
+                opacity: 0;
+                transform: translateX(100%);
+                transition: all 0.3s ease;
+                cursor: pointer;
+                border: ${borderStyle};
+                animation: ${pulseAnimation};
+            `;
+
+            // Add pulse animation for persistent messages
+            if (persistent && !document.querySelector('#notification-pulse-style')) {
+                const style = document.createElement('style');
+                style.id = 'notification-pulse-style';
+                style.textContent = `
+                    @keyframes pulse {
+                        0% { box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+                        50% { box-shadow: 0 6px 30px rgba(255,255,255,0.3); }
+                        100% { box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            const clickToCloseText = persistent ? ' (Click to dismiss)' : '';
+            notification.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span>${this.getIcon(type)}</span>
+                    <span>${message}${clickToCloseText}</span>
+                    <span style="margin-left: auto; font-size: 18px;">&times;</span>
+                </div>
+            `;
+
+            notification.addEventListener('click', () => {
+                this.remove(notification);
+            });
+
+            document.body.appendChild(notification);
+
+            // Trigger animation
+            setTimeout(() => {
+                notification.style.opacity = '1';
+                notification.style.transform = 'translateX(0)';
+            }, 100);
+
+            return notification;
+        }
+
+        getIcon(type) {
+            const icons = {
+                success: '✅',
+                error: '❌',
+                warning: '⚠️',
+                info: 'ℹ️'
+            };
+            return icons[type] || icons.info;
+        }
+
+        remove(notification) {
+            if (notification && notification.parentNode) {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.remove();
+                    }
+                    // Restack remaining notifications
+                    this.restackNotifications();
+                }, 300);
+            }
+            
+            const index = this.notifications.indexOf(notification);
+            if (index > -1) {
+                this.notifications.splice(index, 1);
+            }
+        }
+
+        restackNotifications() {
+            this.notificationStack = 200; // Reset to avoid automation widget
+            this.notifications.forEach((notification, index) => {
+                if (notification.parentNode) {
+                    const newTop = this.notificationStack + (index * 80);
+                    notification.style.top = `${newTop}px`;
+                }
+            });
+            // Reset stack position for next notification
+            this.notificationStack = 200 + (this.notifications.length * 80);
+        }
+
+        clear() {
+            this.notifications.forEach(notification => this.remove(notification));
+            this.notificationStack = 200; // Reset to avoid automation widget
+            this.shownMessages.clear(); // Reset shown messages when clearing
+        }
+
+        // Method to clear persistent message tracking (for page reloads)
+        resetPersistentMessages() {
+            this.shownMessages.clear();
+        }
+    }
+
+    const notifications = new NotificationManager();
 
     // Performance Optimizations based on Stash Architecture Research
     const STASH_CONFIG = {
         // React SPA optimization - based on Stash's React architecture
-        REACT_RENDER_DELAY: 200,        // Wait for React component lifecycle
-        GRAPHQL_MUTATION_DELAY: 500,    // GraphQL mutations need processing time
-        UI_TRANSITION_DELAY: 300,       // UI transitions in Stash
-        SCRAPER_OPERATION_DELAY: 1000,  // Scraper system response time
+        REACT_RENDER_DELAY: getConfig(CONFIG_KEYS.SCRAPER_DELAYS).reaction || 200,
+        GRAPHQL_MUTATION_DELAY: getConfig(CONFIG_KEYS.SCRAPER_DELAYS).graphql || 500,
+        UI_TRANSITION_DELAY: getConfig(CONFIG_KEYS.SCRAPER_DELAYS).ui || 300,
+        SCRAPER_OPERATION_DELAY: getConfig(CONFIG_KEYS.SCRAPER_DELAYS).scraper || 1000,
         
         // Stash Entity Edit Panel selectors - based on architecture documentation
         SELECTORS: {
@@ -35,10 +260,790 @@
 
     // Global state to prevent button recreation after successful completion
     let automationCompleted = false;
+    let uiMinimized = false;
+    let automationInProgress = false;
+    let automationCancelled = false;
+    
+    // Use window property to persist across DOM observer calls
+    window.userManuallyExpanded = window.userManuallyExpanded || false;
 
-    function sleep(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
+    // Global fallback function for minimized button (define early to ensure availability)
+    window.expandAutomateStash = function() {
+        console.log('🔄 DEBUG: *** GLOBAL FALLBACK FUNCTION CALLED ***');
+        console.log('🔄 Global fallback: Expanding AutomateStash panel');
+        
+        // Set flag to indicate user manually expanded the widget
+        console.log('🔧 DEBUG: Setting userManuallyExpanded flag via global fallback...');
+        window.userManuallyExpanded = true;
+        console.log('🔓 User manually expanded via global fallback - disabling auto-minimization');
+        console.log('🔍 DEBUG: Flag set to:', window.userManuallyExpanded);
+        
+        // Remove existing elements
+        console.log('🧹 DEBUG: Clearing existing elements via global fallback...');
+        const existingPanel = document.querySelector('#stash-automation-panel');
+        if (existingPanel) {
+            console.log('🗑️ DEBUG: Removing existing panel via global fallback');
+            existingPanel.remove();
+        } else {
+            console.log('✅ DEBUG: No existing panel to remove via global fallback');
+        }
+        
+        const existingMinimized = document.querySelector('#stash-minimized-button');
+        if (existingMinimized) {
+            console.log('🗑️ DEBUG: Removing existing minimized button via global fallback');
+            existingMinimized.remove();
+        } else {
+            console.log('✅ DEBUG: No existing minimized button to remove via global fallback');
+        }
+        
+        // Reset state and recreate
+        console.log('🔄 DEBUG: Resetting state via global fallback...');
+        window.lastButtonCreationAttempt = 0;
+        window.buttonCreationInProgress = false;
+        console.log('✅ DEBUG: State reset complete via global fallback');
+        
+        // Use UIManager method to ensure consistent UI
+        console.log('🚀 DEBUG: Calling uiManager.createFullPanelForced via global fallback...');
+        console.log('🔍 DEBUG: uiManager exists:', !!window.uiManager || !!uiManager);
+        
+        if (typeof uiManager !== 'undefined' && uiManager.createFullPanelForced) {
+            console.log('✅ DEBUG: uiManager available, calling createFullPanelForced...');
+            uiManager.createFullPanelForced();
+            console.log('✅ DEBUG: createFullPanelForced called successfully via global fallback');
+        } else {
+            console.error('❌ DEBUG: uiManager not available in global scope');
+            console.log('🔄 DEBUG: Attempting direct panel creation...');
+            
+            // Last resort: try to create panel directly
+            try {
+                createOptimizedButtons();
+            } catch (error) {
+                console.error('❌ DEBUG: Failed to create buttons directly:', error);
+            }
+        }
+    };
+
+    // Automation Control Functions
+    function startAutomation() {
+        automationInProgress = true;
+        automationCancelled = false;
+        console.log('🚀 Automation started');
+        
+        // Remove the main automation panel completely during automation
+        const panel = document.querySelector('#stash-automation-panel');
+        if (panel) {
+            panel.remove();
+        }
+        
+        // Also remove any minimized buttons to prevent conflicts
+        const minimizedBtn = document.querySelector('#stash-minimized-button');
+        if (minimizedBtn) {
+            minimizedBtn.remove();
+        }
+        
+        // Show cancel button
+        showCancelButton();
     }
+
+    function stopAutomation() {
+        automationInProgress = false;
+        automationCancelled = true;
+        console.log('🛑 Automation cancelled by user');
+        notifications.show('🛑 Automation cancelled', 'warning');
+        
+        // Remove cancel button
+        const cancelBtn = document.querySelector('#stash-cancel-button');
+        if (cancelBtn) cancelBtn.remove();
+        
+        // Recreate the main automation panel
+        setTimeout(() => {
+            if (!document.querySelector('#stash-automation-panel') && !document.querySelector('#stash-minimized-button')) {
+                createOptimizedButtons();
+            }
+        }, 500);
+    }
+
+    function completeAutomation() {
+        automationInProgress = false;
+        console.log('✅ Automation completed');
+        
+        // Remove cancel button
+        const cancelBtn = document.querySelector('#stash-cancel-button');
+        if (cancelBtn) cancelBtn.remove();
+        
+        // The UI management will be handled by the automateComplete function
+        // based on the minimize_when_complete setting
+    }
+
+    function showCancelButton() {
+        // Remove existing cancel button if any
+        const existingBtn = document.querySelector('#stash-cancel-button');
+        if (existingBtn) existingBtn.remove();
+
+        const cancelButton = document.createElement('div');
+        cancelButton.id = 'stash-cancel-button';
+        cancelButton.style.cssText = `
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            z-index: 10000;
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            padding: 15px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 4px 20px rgba(231, 76, 60, 0.4);
+            transition: all 0.2s ease;
+            border: 2px solid rgba(255,255,255,0.3);
+            min-width: 120px;
+            text-align: center;
+        `;
+
+        cancelButton.innerHTML = '🛑 CANCEL';
+
+        cancelButton.addEventListener('mouseenter', () => {
+            cancelButton.style.transform = 'scale(1.05)';
+            cancelButton.style.boxShadow = '0 6px 25px rgba(231, 76, 60, 0.6)';
+        });
+
+        cancelButton.addEventListener('mouseleave', () => {
+            cancelButton.style.transform = 'scale(1)';
+            cancelButton.style.boxShadow = '0 4px 20px rgba(231, 76, 60, 0.4)';
+        });
+
+        cancelButton.addEventListener('click', () => {
+            if (confirm('Are you sure you want to cancel the automation?')) {
+                stopAutomation();
+            }
+        });
+
+        document.body.appendChild(cancelButton);
+    }
+
+    // Check if automation should be cancelled
+    function checkCancellation() {
+        if (automationCancelled) {
+            throw new Error('Automation cancelled by user');
+        }
+    }
+
+    // Enhanced UI Management with Minimization Support
+    class UIManager {
+        constructor() {
+            this.isMinimized = false;
+            this.panel = null;
+        }
+
+        createConfigDialog() {
+            // Remove any existing dialog first
+            const existingDialog = document.querySelector('#stash-config-dialog');
+            const existingBackdrop = document.querySelector('#stash-config-backdrop');
+            if (existingDialog) existingDialog.remove();
+            if (existingBackdrop) existingBackdrop.remove();
+
+            const backdrop = document.createElement('div');
+            backdrop.id = 'stash-config-backdrop';
+            backdrop.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.7);
+                z-index: 10001;
+                backdrop-filter: blur(5px);
+            `;
+
+            const dialog = document.createElement('div');
+            dialog.id = 'stash-config-dialog';
+            dialog.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                z-index: 10002;
+                background: #2c3e50;
+                color: white;
+                padding: 30px;
+                border-radius: 15px;
+                max-width: 500px;
+                width: 90%;
+                max-height: 80vh;
+                overflow-y: auto;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+                font-family: 'Segoe UI', sans-serif;
+                border: 2px solid rgba(255,255,255,0.1);
+            `;
+
+            const configOptions = [
+                { key: CONFIG_KEYS.AUTO_SCRAPE_STASHDB, label: 'Auto-scrape StashDB', type: 'checkbox' },
+                { key: CONFIG_KEYS.AUTO_SCRAPE_THEPORNDB, label: 'Auto-scrape ThePornDB', type: 'checkbox' },
+                { key: CONFIG_KEYS.AUTO_ORGANIZE, label: 'Auto-organize scenes', type: 'checkbox' },
+                { key: CONFIG_KEYS.SHOW_NOTIFICATIONS, label: 'Show notifications', type: 'checkbox' },
+                { key: CONFIG_KEYS.MINIMIZE_WHEN_COMPLETE, label: 'Minimize UI when complete', type: 'checkbox' },
+                { key: CONFIG_KEYS.AUTO_APPLY_CHANGES, label: 'Auto-apply changes (no confirmation)', type: 'checkbox' },
+                { key: CONFIG_KEYS.SKIP_ALREADY_SCRAPED, label: 'Skip already scraped sources', type: 'checkbox' }
+            ];
+
+            let configHTML = `
+                <h2 style="margin-top: 0; color: #3498db; text-align: center;">⚙️ AutomateStash Configuration</h2>
+                <div style="margin-bottom: 20px;">
+            `;
+
+            configOptions.forEach(option => {
+                const checked = getConfig(option.key) ? 'checked' : '';
+                configHTML += `
+                    <label style="display: block; margin-bottom: 15px; cursor: pointer; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.05); transition: background 0.2s ease;">
+                        <input type="checkbox" id="${option.key}" ${checked} 
+                               style="margin-right: 10px; transform: scale(1.2);" data-config-key="${option.key}">
+                        <span style="font-size: 14px;">${option.label}</span>
+                    </label>
+                `;
+            });
+
+            configHTML += `
+                </div>
+                <div style="text-align: center; gap: 15px; display: flex; justify-content: center; flex-wrap: wrap;">
+                    <button id="save-config" style="background: #27ae60; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s ease;">
+                        💾 Save Settings
+                    </button>
+                    <button id="reset-config" style="background: #e74c3c; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s ease;">
+                        🔄 Reset to Defaults
+                    </button>
+                    <button id="close-config" style="background: #95a5a6; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s ease;">
+                        ✖️ Close
+                    </button>
+                </div>
+            `;
+
+            dialog.innerHTML = configHTML;
+
+            // Define close function
+            const closeDialog = () => {
+                console.log('🔄 Closing configuration dialog');
+                if (backdrop && backdrop.parentNode) {
+                    backdrop.remove();
+                }
+                if (dialog && dialog.parentNode) {
+                    dialog.remove();
+                }
+            };
+
+            // Event listeners with proper error handling
+            try {
+                // Save button
+                const saveBtn = dialog.querySelector('#save-config');
+                if (saveBtn) {
+                    saveBtn.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        console.log('💾 Saving configuration...');
+                        
+                        try {
+                            configOptions.forEach(option => {
+                                const checkbox = dialog.querySelector(`#${option.key}`);
+                                if (checkbox) {
+                                    setConfig(option.key, checkbox.checked);
+                                    console.log(`📝 Set ${option.key} = ${checkbox.checked}`);
+                                }
+                            });
+                            notifications.show('⚙️ Configuration saved successfully!', 'success');
+                            closeDialog();
+                        } catch (error) {
+                            console.error('❌ Error saving configuration:', error);
+                            notifications.show('❌ Error saving configuration', 'error');
+                        }
+                    });
+                }
+
+                // Reset button
+                const resetBtn = dialog.querySelector('#reset-config');
+                if (resetBtn) {
+                    resetBtn.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        console.log('🔄 Resetting configuration...');
+                        
+                        if (confirm('Reset all settings to defaults?\n\nThis cannot be undone.')) {
+                            try {
+                                Object.keys(DEFAULT_CONFIG).forEach(key => {
+                                    GM_deleteValue(key);
+                                    console.log(`🗑️ Reset ${key}`);
+                                });
+                                notifications.show('🔄 Settings reset to defaults', 'info');
+                                closeDialog();
+                            } catch (error) {
+                                console.error('❌ Error resetting configuration:', error);
+                                notifications.show('❌ Error resetting configuration', 'error');
+                            }
+                        }
+                    });
+                }
+
+                // Close button
+                const closeBtn = dialog.querySelector('#close-config');
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        closeDialog();
+                    });
+                }
+
+                // Backdrop click to close
+                backdrop.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    closeDialog();
+                });
+
+                // Prevent dialog clicks from closing the dialog
+                dialog.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                });
+
+                // Add hover effects to buttons
+                const buttons = dialog.querySelectorAll('button');
+                buttons.forEach(button => {
+                    button.addEventListener('mouseenter', () => {
+                        button.style.transform = 'translateY(-1px)';
+                        button.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+                    });
+                    
+                    button.addEventListener('mouseleave', () => {
+                        button.style.transform = 'translateY(0)';
+                        button.style.boxShadow = 'none';
+                    });
+                });
+
+            } catch (error) {
+                console.error('❌ Error attaching event listeners to config dialog:', error);
+            }
+
+            // Append to DOM
+            document.body.appendChild(backdrop);
+            document.body.appendChild(dialog);
+            
+            console.log('✅ Configuration dialog created successfully');
+        }
+
+        createMinimizedButton() {
+            if (document.querySelector('#stash-minimized-button')) {
+                console.log('🔄 Minimized button already exists, skipping creation');
+                return;
+            }
+
+            console.log('🎯 Creating minimized button');
+            console.log('🔍 DEBUG: Current userManuallyExpanded flag:', window.userManuallyExpanded);
+            
+            const button = document.createElement('div');
+            button.id = 'stash-minimized-button';
+            button.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                width: 60px;
+                height: 60px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-radius: 50%;
+                cursor: pointer;
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                transition: transform 0.2s ease;
+                border: 2px solid rgba(255,255,255,0.3);
+            `;
+
+            button.innerHTML = '🚀';
+            button.style.fontSize = '24px';
+
+            // Add tooltip first
+            const tooltip = document.createElement('div');
+            tooltip.style.cssText = `
+                position: absolute;
+                bottom: 70px;
+                right: 0;
+                background: rgba(0,0,0,0.8);
+                color: white;
+                padding: 8px 12px;
+                border-radius: 6px;
+                font-size: 12px;
+                white-space: nowrap;
+                opacity: 0;
+                transition: opacity 0.2s;
+                pointer-events: none;
+            `;
+            tooltip.textContent = 'Click to expand AutomateStash';
+            button.appendChild(tooltip);
+
+            // Store reference to UIManager instance for proper context binding
+            const uiManagerRef = this;
+            
+            console.log('🔧 DEBUG: UIManager reference stored:', !!uiManagerRef);
+            console.log('🔧 DEBUG: UIManager createFullPanelForced method exists:', typeof uiManagerRef.createFullPanelForced);
+
+            // Event handlers with proper context binding
+            button.addEventListener('mouseenter', () => {
+                console.log('🖱️ DEBUG: Mouse entered minimized button');
+                button.style.transform = 'scale(1.1)';
+                tooltip.style.opacity = '1';
+            });
+
+            button.addEventListener('mouseleave', () => {
+                console.log('🖱️ DEBUG: Mouse left minimized button');
+                button.style.transform = 'scale(1)';
+                tooltip.style.opacity = '0';
+            });
+
+            button.addEventListener('click', () => {
+                console.log('🔄 DEBUG: *** MINIMIZED BUTTON CLICKED ***');
+                console.log('🔍 DEBUG: Event handler executing...');
+                console.log('🔍 DEBUG: UIManager reference in click handler:', !!uiManagerRef);
+                console.log('🔍 DEBUG: createFullPanelForced available:', typeof uiManagerRef.createFullPanelForced);
+                
+                // Set flag to indicate user manually expanded the widget
+                console.log('🔧 DEBUG: Setting userManuallyExpanded flag...');
+                window.userManuallyExpanded = true;
+                console.log('🔓 User manually expanded - disabling auto-minimization');
+                console.log('🔍 DEBUG: Flag set to:', window.userManuallyExpanded);
+                
+                try {
+                    console.log('🧹 DEBUG: Clearing existing elements...');
+                    
+                    // Clear existing elements
+                    const existingPanel = document.querySelector('#stash-automation-panel');
+                    if (existingPanel) {
+                        console.log('🗑️ DEBUG: Removing existing panel');
+                        existingPanel.remove();
+                    } else {
+                        console.log('✅ DEBUG: No existing panel to remove');
+                    }
+                    
+                    // Remove the minimized button
+                    console.log('🗑️ DEBUG: Removing minimized button');
+                    button.remove();
+                    console.log('✅ DEBUG: Minimized button removed');
+                    
+                    // Reset cooldown and state flags to ensure panel creation works
+                    console.log('🔄 DEBUG: Resetting state flags...');
+                    window.lastButtonCreationAttempt = 0;
+                    window.buttonCreationInProgress = false;
+                    console.log('✅ DEBUG: State flags reset');
+                    
+                    // Create full panel - use direct method to avoid context issues
+                    console.log('🚀 DEBUG: Calling createFullPanelForced...');
+                    uiManagerRef.createFullPanelForced();
+                    console.log('✅ DEBUG: createFullPanelForced called successfully');
+                    
+                } catch (error) {
+                    console.error('❌ DEBUG: Error in minimized button click handler:', error);
+                    console.error('❌ DEBUG: Error stack:', error.stack);
+                    
+                    // Fallback: Use global function to ensure it works
+                    console.log('🔄 DEBUG: Attempting fallback method...');
+                    button.remove();
+                    
+                    if (typeof window.expandAutomateStash === 'function') {
+                        console.log('🔄 DEBUG: Calling global fallback function...');
+                        window.expandAutomateStash();
+                        console.log('✅ DEBUG: Global fallback called');
+                    } else {
+                        console.error('❌ DEBUG: Global fallback function not available');
+                    }
+                }
+            });
+
+            // Also add the global function as a backup (in case context is lost)
+            console.log('🔧 DEBUG: Adding onclick attribute as backup...');
+            button.setAttribute('onclick', 'window.expandAutomateStash()');
+            console.log('✅ DEBUG: onclick attribute set');
+
+            console.log('📌 DEBUG: Appending button to document body...');
+            document.body.appendChild(button);
+            console.log('✅ Minimized button created successfully');
+            console.log('🔍 DEBUG: Button element in DOM:', !!document.querySelector('#stash-minimized-button'));
+        }
+
+        showFullPanel() {
+            console.log('🔄 Showing full panel (user requested)');
+            this.isMinimized = false;
+            
+            // Remove existing elements
+            const existingPanel = document.querySelector('#stash-automation-panel');
+            if (existingPanel) existingPanel.remove();
+            
+            const existingMinimized = document.querySelector('#stash-minimized-button');
+            if (existingMinimized) existingMinimized.remove();
+            
+            // Reset the cooldown mechanism and state flags
+            window.lastButtonCreationAttempt = 0;
+            window.buttonCreationInProgress = false;
+            
+            // Force creation of full panel
+            this.createFullPanelForced();
+        }
+
+        // Force creation of full panel regardless of automation status (used when user explicitly requests it)
+        async createFullPanelForced() {
+            console.log('🎯 DEBUG: *** createFullPanelForced CALLED ***');
+            console.log('🎯 Creating full automation panel (user requested)');
+            
+            // Add a flag to prevent multiple button creation attempts
+            if (window.buttonCreationInProgress) {
+                console.log('🔄 DEBUG: Button creation already in progress, skipping...');
+                console.log('🔄 Button creation already in progress, skipping...');
+                return;
+            }
+            
+            console.log('🔧 DEBUG: Setting buttonCreationInProgress flag...');
+            window.buttonCreationInProgress = true;
+            console.log('✅ DEBUG: buttonCreationInProgress set to true');
+
+            try {
+                console.log('🧹 DEBUG: Removing any existing panels/buttons...');
+                
+                // Remove any existing panels/buttons
+                const existingPanel = document.querySelector('#stash-automation-panel');
+                if (existingPanel) {
+                    console.log('🗑️ DEBUG: Removing existing panel in createFullPanelForced');
+                    existingPanel.remove();
+                } else {
+                    console.log('✅ DEBUG: No existing panel to remove in createFullPanelForced');
+                }
+                
+                const existingMinimized = document.querySelector('#stash-minimized-button');
+                if (existingMinimized) {
+                    console.log('🗑️ DEBUG: Removing existing minimized button in createFullPanelForced');
+                    existingMinimized.remove();
+                } else {
+                    console.log('✅ DEBUG: No existing minimized button to remove in createFullPanelForced');
+                }
+
+                console.log('🎨 DEBUG: Creating new panel element...');
+                const panel = document.createElement('div');
+                panel.id = 'stash-automation-panel';
+                console.log('✅ DEBUG: Panel element created with ID:', panel.id);
+                panel.style.cssText = `
+                    position: fixed;
+                    top: 10px;
+                    right: 10px;
+                    z-index: 10000;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 15px;
+                    padding: 20px;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                    border: 1px solid rgba(255,255,255,0.2);
+                    backdrop-filter: blur(15px);
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    min-width: 280px;
+                    max-width: 400px;
+                `;
+
+                // Create header with minimize button
+                const header = document.createElement('div');
+                header.style.cssText = `
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 15px;
+                `;
+
+                const title = document.createElement('h3');
+                title.textContent = 'AutomateStash v3.3.4';
+                title.style.cssText = `
+                    color: white;
+                    margin: 0;
+                    font-size: 16px;
+                    font-weight: 600;
+                `;
+
+                const minimizeBtn = document.createElement('button');
+                minimizeBtn.innerHTML = '−';
+                minimizeBtn.style.cssText = `
+                    background: rgba(255,255,255,0.2);
+                    border: none;
+                    color: white;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    cursor: pointer;
+                    font-size: 16px;
+                    font-weight: bold;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.2s ease;
+                `;
+
+                minimizeBtn.addEventListener('mouseenter', () => {
+                    minimizeBtn.style.background = 'rgba(255,255,255,0.3)';
+                });
+
+                minimizeBtn.addEventListener('mouseleave', () => {
+                    minimizeBtn.style.background = 'rgba(255,255,255,0.2)';
+                });
+
+                // Store reference to UIManager instance for proper context binding
+                const uiManagerRef = this;
+
+                minimizeBtn.addEventListener('click', () => {
+                    console.log('🔄 DEBUG: Minimize button clicked');
+                    console.log('🔍 DEBUG: UIManager context available:', !!uiManagerRef);
+                    console.log('🔍 DEBUG: minimizePanel method available:', typeof uiManagerRef.minimizePanel);
+                    uiManagerRef.minimizePanel();
+                });
+
+                header.appendChild(title);
+                header.appendChild(minimizeBtn);
+                panel.appendChild(header);
+
+                // Get current scene status for display
+                let statusHtml = '<div style="color: #FFE066; margin-bottom: 15px; font-size: 14px;">📊 Checking scene status...</div>';
+                
+                try {
+                    const [scrapedStatus, organizedStatus] = await Promise.all([
+                        detectAlreadyScrapedSources(),
+                        checkIfAlreadyOrganized()
+                    ]);
+                    
+                    const autoStashDB = getConfig(CONFIG_KEYS.AUTO_SCRAPE_STASHDB);
+                    const autoThePornDB = getConfig(CONFIG_KEYS.AUTO_SCRAPE_THEPORNDB);
+                    const autoOrganize = getConfig(CONFIG_KEYS.AUTO_ORGANIZE);
+                    
+                    let statusParts = [];
+                    
+                    if (autoStashDB) {
+                        statusParts.push(`StashDB: ${scrapedStatus.stashdb ? '✅' : '❌'}`);
+                    }
+                    
+                    if (autoThePornDB) {
+                        statusParts.push(`ThePornDB: ${scrapedStatus.theporndb ? '✅' : '❌'}`);
+                    }
+                    
+                    if (autoOrganize) {
+                        statusParts.push(`Organized: ${organizedStatus ? '✅' : '❌'}`);
+                    }
+                    
+                    if (statusParts.length > 0) {
+                        statusHtml = `<div style="color: #E0E0E0; margin-bottom: 15px; font-size: 13px; line-height: 1.4;">
+                            📊 Current Status:<br>
+                            ${statusParts.join('<br>')}
+                        </div>`;
+                    } else {
+                        statusHtml = '<div style="color: #FFE066; margin-bottom: 15px; font-size: 13px;">⚙️ Configure automation in settings</div>';
+                    }
+                } catch (error) {
+                    statusHtml = '<div style="color: #FF9999; margin-bottom: 15px; font-size: 13px;">⚠️ Could not check status</div>';
+                }
+
+                panel.innerHTML += statusHtml;
+
+                // Create main automation button
+                const automateBtn = document.createElement('button');
+                automateBtn.textContent = '🚀 Start Automation';
+                automateBtn.style.cssText = `
+                    width: 100%;
+                    padding: 12px 20px;
+                    background: linear-gradient(135deg, #FF6B6B, #EE5A24);
+                    color: white;
+                    border: none;
+                    border-radius: 25px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    margin-bottom: 12px;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 4px 15px rgba(238, 90, 36, 0.4);
+                `;
+
+                automateBtn.addEventListener('mouseenter', () => {
+                    automateBtn.style.transform = 'translateY(-2px)';
+                    automateBtn.style.boxShadow = '0 6px 20px rgba(238, 90, 36, 0.6)';
+                });
+
+                automateBtn.addEventListener('mouseleave', () => {
+                    automateBtn.style.transform = 'translateY(0)';
+                    automateBtn.style.boxShadow = '0 4px 15px rgba(238, 90, 36, 0.4)';
+                });
+
+                automateBtn.addEventListener('click', async () => {
+                    console.log('🚀 User initiated automation');
+                    try {
+                        await automateComplete();
+                    } catch (error) {
+                        console.error('❌ Automation failed:', error);
+                        notifications.show('❌ Automation failed: ' + error.message, 'error');
+                    }
+                });
+
+                panel.appendChild(automateBtn);
+
+                // Create settings button
+                const settingsBtn = document.createElement('button');
+                settingsBtn.textContent = '⚙️ Settings';
+                settingsBtn.style.cssText = `
+                    width: 100%;
+                    padding: 10px 20px;
+                    background: rgba(255,255,255,0.15);
+                    color: white;
+                    border: 1px solid rgba(255,255,255,0.3);
+                    border-radius: 20px;
+                    font-size: 13px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                `;
+
+                settingsBtn.addEventListener('mouseenter', () => {
+                    settingsBtn.style.background = 'rgba(255,255,255,0.25)';
+                });
+
+                settingsBtn.addEventListener('mouseleave', () => {
+                    settingsBtn.style.background = 'rgba(255,255,255,0.15)';
+                });
+
+                settingsBtn.addEventListener('click', () => {
+                    uiManager.createConfigDialog();
+                });
+
+                panel.appendChild(settingsBtn);
+                
+                console.log('📌 DEBUG: Appending panel to document body...');
+                document.body.appendChild(panel);
+                console.log('✅ DEBUG: Panel appended to body successfully');
+                console.log('🔍 DEBUG: Panel in DOM:', !!document.querySelector('#stash-automation-panel'));
+
+                console.log('✅ Full automation panel created successfully');
+
+            } catch (error) {
+                console.error('❌ DEBUG: Error creating full panel:', error);
+                console.error('❌ DEBUG: Error stack:', error.stack);
+            } finally {
+                console.log('🔄 DEBUG: Resetting buttonCreationInProgress flag...');
+                window.buttonCreationInProgress = false;
+                console.log('✅ DEBUG: buttonCreationInProgress reset to false');
+            }
+        }
+
+        minimizePanel() {
+            this.isMinimized = true;
+            window.userManuallyExpanded = false; // Reset manual expansion flag when manually minimizing
+            console.log('📦 User manually minimized - resetting expansion flag');
+            const panel = document.querySelector('#stash-automation-panel');
+            if (panel) {
+                console.log('🗑️ Removing full panel to minimize');
+                panel.remove();
+            }
+            this.createMinimizedButton();
+        }
+
+        // Alias method for consistency and backward compatibility
+        showConfigDialog() {
+            return this.createConfigDialog();
+        }
+    }
+
+    const uiManager = new UIManager();
 
     // Optimized element waiting with React lifecycle awareness
     async function waitForElement(selector, timeout = 10000, reactAware = true) {
@@ -283,94 +1288,251 @@
         return null;
     }
 
-    async function findOrganizedButton() {
-        // Try multiple strategies to find the organized button based on Stash architecture
-        const strategies = [
-            // Strategy 1: Look for the exact Stash structure - button with box icon in scene toolbar
-            () => {
-                const toolbarButtons = document.querySelectorAll('.scene-toolbar button.minimal.btn.btn-primary, .toolbar button.minimal.btn.btn-primary');
-                for (const button of toolbarButtons) {
-                    const boxIcon = button.querySelector('svg[data-icon="box"]');
-                    if (boxIcon) {
-                        console.log('Found organized button via scene toolbar + box icon:', button.outerHTML.substring(0, 100));
-                        return button;
-                    }
-                }
-                return null;
-            },
-            
-            // Strategy 2: Look for buttons with box icon (faBox) anywhere
-            () => {
-                const buttons = document.querySelectorAll('button');
-                for (const button of buttons) {
-                    const boxIcons = button.querySelectorAll('svg[data-icon="box"]');
-                    if (boxIcons.length > 0) {
-                        console.log('Found organized button via box icon:', button.outerHTML.substring(0, 100));
-                        return button;
-                    }
-                }
-                return null;
-            },
-            
-            // Strategy 3: Look for buttons with "organized" title or aria-label
-            () => {
-                const buttons = document.querySelectorAll('button[title*="rganized"], button[aria-label*="rganized"]');
-                if (buttons.length > 0) {
-                    console.log('Found organized button via title/aria-label:', buttons[0].outerHTML.substring(0, 100));
-                    return buttons[0];
-                }
-                return null;
-            },
-            
-            // Strategy 4: Look for buttons containing "organized" text
-            () => {
-                const buttons = document.querySelectorAll('button');
-                for (const button of buttons) {
-                    const text = button.textContent.toLowerCase().trim();
-                    if (text === 'organized' || text.includes('organized')) {
-                        console.log('Found organized button via text search:', button.textContent.trim());
-                        return button;
-                    }
-                }
-                return null;
-            },
-            
-            // Strategy 5: Look for specific CSS classes combination that might be used
-            () => {
-                const selectors = [
-                    'button.minimal.organized-button.organized.btn.btn-secondary',
-                    'button.organized-button',
-                    'button.organized',
-                    'button[class*="organized"]',
-                    'button.btn.btn-secondary[title*="organized"]',
-                    'button.minimal.btn.btn-primary' // Generic fallback for Stash buttons
-                ];
-                
-                for (const selector of selectors) {
-                    const button = document.querySelector(selector);
-                    if (button) {
-                        // Additional validation for generic selector
-                        if (selector === 'button.minimal.btn.btn-primary') {
-                            const boxIcon = button.querySelector('svg[data-icon="box"]');
-                            if (!boxIcon) continue; // Skip if no box icon
-                        }
-                        console.log('Found organized button via CSS selector:', selector);
-                        return button;
-                    }
-                }
-                return null;
-            }
-        ];
+    // GraphQL-based organized status detection (replaces unreliable UI detection)
+    async function getSceneOrganizedStatus() {
+        console.log('🔍 Checking organized status via GraphQL API...');
         
-        for (let i = 0; i < strategies.length; i++) {
-            console.log(`Trying strategy ${i + 1} to find organized button...`);
-            const button = strategies[i]();
-            if (button) {
-                return button;
+        try {
+            // Extract scene ID from URL (e.g., /scenes/123)
+            const sceneId = extractSceneIdFromUrl();
+            if (!sceneId) {
+                console.error('❌ Could not extract scene ID from URL');
+                return null;
             }
+            
+            console.log(`📡 Querying organized status for scene ID: ${sceneId}`);
+            
+            // GraphQL query to get scene organized status
+            const query = `
+                query FindScene($id: ID!) {
+                    findScene(id: $id) {
+                        id
+                        organized
+                    }
+                }
+            `;
+            
+            const variables = { id: sceneId };
+            
+            // Execute GraphQL query using Stash's built-in fetch
+            const response = await fetch('/graphql', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    query: query,
+                    variables: variables
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`GraphQL request failed: ${response.status} ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.errors) {
+                console.error('❌ GraphQL errors:', result.errors);
+                return null;
+            }
+            
+            const scene = result.data?.findScene;
+            if (!scene) {
+                console.error('❌ Scene not found in GraphQL response');
+                return null;
+            }
+            
+            const isOrganized = scene.organized === true;
+            console.log(`✅ Scene organized status: ${isOrganized}`);
+            
+            return isOrganized;
+            
+        } catch (error) {
+            console.error('❌ Failed to query organized status via GraphQL:', error);
+            // Fallback to UI detection as last resort
+            console.log('🔄 Falling back to UI-based detection...');
+            return await detectOrganizedStatusFallback();
         }
+    }
+    
+    // Fallback UI-based organized status detection (only used if GraphQL fails)
+    async function detectOrganizedStatusFallback() {
+        console.log('🔄 Using fallback UI-based organized detection...');
         
-        return null;
+        try {
+            // Simplified strategies focusing on most reliable patterns
+            const strategies = [
+                // Strategy 1: Look for button with box icon in scene toolbar
+                () => {
+                    const toolbarButtons = document.querySelectorAll('.scene-toolbar button, .toolbar button');
+                    for (const button of toolbarButtons) {
+                        const boxIcon = button.querySelector('svg[data-icon="box"]');
+                        if (boxIcon) {
+                            console.log('Found organized button via box icon');
+                            return button;
+                        }
+                    }
+                    return null;
+                },
+                
+                // Strategy 2: Look for buttons with "organized" in title/aria-label
+                () => {
+                    const button = document.querySelector('button[title*="rganized"], button[aria-label*="rganized"]');
+                    if (button) {
+                        console.log('Found organized button via title/aria-label');
+                        return button;
+                    }
+                    return null;
+                }
+            ];
+            
+            for (let i = 0; i < strategies.length; i++) {
+                const button = strategies[i]();
+                if (button) {
+                    // Return organized status based on button state
+                    const isOrganized = button.classList.contains('organized') || 
+                                      button.getAttribute('aria-pressed') === 'true' ||
+                                      button.title?.toLowerCase().includes('organized');
+                    console.log(`✅ UI fallback detected organized status: ${isOrganized}`);
+                    return isOrganized;
+                }
+            }
+            
+            console.log('❌ Could not determine organized status via UI fallback');
+            return null;
+            
+        } catch (error) {
+            console.error('❌ UI fallback detection failed:', error);
+            return null;
+        }
+    }
+    
+    // Extract scene ID from current URL
+    function extractSceneIdFromUrl() {
+        const url = window.location.pathname;
+        const sceneMatch = url.match(/\/scenes\/(\d+)/);
+        return sceneMatch ? sceneMatch[1] : null;
+    }
+    
+    // Function to organize a scene using GraphQL mutation
+    async function organizeScene() {
+        console.log('📦 Organizing scene via GraphQL...');
+        
+        try {
+            // Extract scene ID from URL
+            const sceneId = extractSceneIdFromUrl();
+            if (!sceneId) {
+                console.error('❌ Could not extract scene ID from URL');
+                return false;
+            }
+            
+            console.log(`📡 Organizing scene ID: ${sceneId}`);
+            
+            // GraphQL mutation to update scene organized status
+            const mutation = `
+                mutation SceneUpdate($input: SceneUpdateInput!) {
+                    sceneUpdate(input: $input) {
+                        id
+                        organized
+                    }
+                }
+            `;
+            
+            const variables = {
+                input: {
+                    id: sceneId,
+                    organized: true
+                }
+            };
+            
+            // Execute GraphQL mutation
+            const response = await fetch('/graphql', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    query: mutation,
+                    variables: variables
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`GraphQL request failed: ${response.status} ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.errors) {
+                console.error('❌ GraphQL errors:', result.errors);
+                return false;
+            }
+            
+            const scene = result.data?.sceneUpdate;
+            if (!scene) {
+                console.error('❌ Scene update failed');
+                return false;
+            }
+            
+            console.log(`✅ Scene organized successfully: ${scene.organized}`);
+            return true;
+            
+        } catch (error) {
+            console.error('❌ Failed to organize scene via GraphQL:', error);
+            // Fallback to UI-based organization
+            console.log('🔄 Falling back to UI-based organization...');
+            return await organizeSceneFallback();
+        }
+    }
+    
+    // Fallback UI-based scene organization (only used if GraphQL fails)
+    async function organizeSceneFallback() {
+        console.log('🔄 Using fallback UI-based organization...');
+        
+        try {
+            // Look for organized button using simplified detection
+            const strategies = [
+                // Strategy 1: Look for button with box icon
+                () => {
+                    const buttons = document.querySelectorAll('button');
+                    for (const button of buttons) {
+                        const boxIcon = button.querySelector('svg[data-icon="box"]');
+                        if (boxIcon) {
+                            console.log('Found organized button via box icon');
+                            return button;
+                        }
+                    }
+                    return null;
+                },
+                
+                // Strategy 2: Look for buttons with "organized" in title/aria-label
+                () => {
+                    const button = document.querySelector('button[title*="rganized"], button[aria-label*="rganized"]');
+                    if (button) {
+                        console.log('Found organized button via title/aria-label');
+                        return button;
+                    }
+                    return null;
+                }
+            ];
+            
+            for (const strategy of strategies) {
+                const button = strategy();
+                if (button) {
+                    button.click();
+                    console.log('✅ UI fallback organized scene successfully');
+                    return true;
+                }
+            }
+            
+            console.log('❌ Could not find organized button for UI fallback');
+            return false;
+            
+        } catch (error) {
+            console.error('❌ UI fallback organization failed:', error);
+            return false;
+        }
     }
 
     // Enhanced Scraper Dropdown Detection - Based on comprehensive Stash architecture research
@@ -657,284 +1819,426 @@
         return false;
     }
 
-    // Detect which scrapers have already been used on this scene
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // GraphQL-based metadata detection (replaces UI-based content analysis)
     async function detectAlreadyScrapedSources() {
-        console.log('🔍 Detecting which scrapers have already been used...');
+        console.log('🔍 GraphQL-based scraper detection in progress...');
+        
+        try {
+            // Use GraphQL-based detection for reliable results
+            const metadataResult = await getSceneMetadataStatus();
+            
+            if (metadataResult === null) {
+                console.log('⚠️ Could not determine metadata status via GraphQL, falling back to UI detection');
+                return await detectAlreadyScrapedSourcesFallback();
+            }
+            
+            return metadataResult;
+            
+        } catch (error) {
+            console.warn('⚠️ Error in GraphQL scraper detection:', error);
+            console.log('🔄 Falling back to UI-based detection...');
+            return await detectAlreadyScrapedSourcesFallback();
+        }
+    }
+
+    // GraphQL-based metadata status detection
+    async function getSceneMetadataStatus() {
+        console.log('🔍 Checking metadata status via GraphQL API...');
+        
+        try {
+            // Extract scene ID from URL (e.g., /scenes/123)
+            const sceneId = extractSceneIdFromUrl();
+            if (!sceneId) {
+                console.error('❌ Could not extract scene ID from URL');
+                return null;
+            }
+            
+            console.log(`📡 Querying metadata status for scene ID: ${sceneId}`);
+            
+            // GraphQL query to get scene metadata for scraper detection
+            const query = `
+                query FindScene($id: ID!) {
+                    findScene(id: $id) {
+                        id
+                        title
+                        details
+                        rating100
+                        studio {
+                            id
+                            name
+                        }
+                        performers {
+                            id
+                            name
+                        }
+                        tags {
+                            id
+                            name
+                        }
+                        stash_ids {
+                            endpoint
+                            stash_id
+                        }
+                        url
+                    }
+                }
+            `;
+            
+            const variables = { id: sceneId };
+            
+            // Execute GraphQL query using Stash's built-in fetch
+            const response = await fetch('/graphql', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    query: query,
+                    variables: variables
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`GraphQL request failed: ${response.status} ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.errors) {
+                console.error('❌ GraphQL errors:', result.errors);
+                return null;
+            }
+            
+            const scene = result.data?.findScene;
+            if (!scene) {
+                console.error('❌ Scene not found in GraphQL response');
+                return null;
+            }
+            
+            // Analyze metadata to determine scraper sources
+            return analyzeSceneMetadataForScrapers(scene);
+            
+        } catch (error) {
+            console.error('❌ Failed to query metadata status via GraphQL:', error);
+            return null;
+        }
+    }
+
+    // Analyze scene metadata to determine which scrapers have been used
+    function analyzeSceneMetadataForScrapers(scene) {
+        console.log('📊 Analyzing scene metadata for scraper detection...');
         
         const scrapedSources = {
             stashdb: false,
-            theporndb: false
+            theporndb: false,
+            confidence: {
+                stashdb: 0,
+                theporndb: 0
+            }
+        };
+        
+        // Check for StashDB indicators
+        let stashdbConfidence = 0;
+        let hasDirectStashDBIdentifier = false;
+        
+        // 1. Direct StashDB stash_ids (strongest indicator)
+        if (scene.stash_ids && scene.stash_ids.length > 0) {
+            const stashdbIds = scene.stash_ids.filter(id => 
+                id.endpoint && (
+                    id.endpoint.includes('stashdb') || 
+                    id.endpoint.includes('stash-db') ||
+                    id.endpoint === 'https://stashdb.org/graphql'
+                )
+            );
+            if (stashdbIds.length > 0) {
+                console.log('✅ Found StashDB stash_ids:', stashdbIds.length);
+                stashdbConfidence += 0.9; // Very high confidence
+                hasDirectStashDBIdentifier = true;
+            }
+        }
+        
+        // 2. StashDB-style URL pattern
+        if (scene.url && scene.url.includes('stashdb.org')) {
+            console.log('✅ Found StashDB URL reference');
+            stashdbConfidence += 0.8;
+            hasDirectStashDBIdentifier = true;
+        }
+        
+        // Check for ThePornDB indicators
+        let theporndbConfidence = 0;
+        let hasDirectThePornDBIdentifier = false;
+        
+        // 1. ThePornDB-style stash_ids or URL patterns
+        if (scene.stash_ids && scene.stash_ids.length > 0) {
+            const theporndbIds = scene.stash_ids.filter(id => 
+                id.endpoint && (
+                    id.endpoint.includes('theporndb') || 
+                    id.endpoint.includes('tpdb') ||
+                    id.endpoint.includes('metadataapi.net')
+                )
+            );
+            if (theporndbIds.length > 0) {
+                console.log('✅ Found ThePornDB stash_ids:', theporndbIds.length);
+                theporndbConfidence += 0.9;
+                hasDirectThePornDBIdentifier = true;
+            }
+        }
+        
+        // 2. ThePornDB-style URL pattern
+        if (scene.url && (scene.url.includes('theporndb') || scene.url.includes('metadataapi.net'))) {
+            console.log('✅ Found ThePornDB URL reference');
+            theporndbConfidence += 0.8;
+            hasDirectThePornDBIdentifier = true;
+        }
+        
+        // 3. Rich metadata suggesting professional scraping
+        let metadataRichness = 0;
+        
+        // Check for meaningful title (not just filename)
+        if (scene.title && scene.title.length > 5 && 
+            !scene.title.match(/^\d{4}-\d{2}-\d{2}/) && 
+            !scene.title.includes('.mp4') && 
+            !scene.title.includes('.mkv')) {
+            console.log('✅ Found meaningful title:', scene.title.substring(0, 50));
+            metadataRichness += 0.3;
+        }
+        
+        // Check for performers
+        if (scene.performers && scene.performers.length > 0) {
+            console.log('✅ Found performers:', scene.performers.length);
+            metadataRichness += 0.4;
+        }
+        
+        // Check for studio
+        if (scene.studio && scene.studio.name) {
+            console.log('✅ Found studio:', scene.studio.name);
+            metadataRichness += 0.3;
+        }
+        
+        // Check for substantial details
+        if (scene.details && scene.details.length > 50) {
+            console.log('✅ Found detailed description');
+            metadataRichness += 0.2;
+        }
+        
+        // Check for rating
+        if (scene.rating100 && scene.rating100 > 0) {
+            console.log('✅ Found rating:', scene.rating100);
+            metadataRichness += 0.2;
+        }
+        
+        // Check for relevant tags
+        if (scene.tags && scene.tags.length > 2) {
+            console.log('✅ Found content tags:', scene.tags.length);
+            metadataRichness += 0.3;
+        }
+        
+        // Only add metadata richness to the scraper that has direct identifiers
+        // This prevents false positives where rich metadata from one scraper 
+        // incorrectly boosts confidence for another scraper
+        if (hasDirectStashDBIdentifier) {
+            stashdbConfidence += Math.min(metadataRichness, 0.6);
+            console.log('🎯 StashDB metadata richness boost applied:', metadataRichness.toFixed(2));
+        } else if (metadataRichness > 0.8 && !hasDirectThePornDBIdentifier) {
+            // If we have very rich metadata but no direct identifiers, 
+            // give slight preference to StashDB as it's more commonly used
+            stashdbConfidence += Math.min(metadataRichness * 0.3, 0.3);
+            console.log('🔍 Weak StashDB inference from rich metadata:', (metadataRichness * 0.3).toFixed(2));
+        }
+        
+        if (hasDirectThePornDBIdentifier) {
+            theporndbConfidence += Math.min(metadataRichness * 0.8, 0.5);
+            console.log('🎯 ThePornDB metadata richness boost applied:', (metadataRichness * 0.8).toFixed(2));
+        }
+        
+        // Determine final results based on confidence thresholds
+        const confidenceThreshold = 0.3; // Minimum confidence to consider "scraped"
+        
+        scrapedSources.stashdb = stashdbConfidence >= confidenceThreshold;
+        scrapedSources.theporndb = theporndbConfidence >= confidenceThreshold;
+        scrapedSources.confidence.stashdb = Math.min(stashdbConfidence, 1.0);
+        scrapedSources.confidence.theporndb = Math.min(theporndbConfidence, 1.0);
+        
+        console.log('🔍 GraphQL metadata analysis results:', {
+            stashdb: `${scrapedSources.stashdb} (confidence: ${scrapedSources.confidence.stashdb.toFixed(2)})`,
+            theporndb: `${scrapedSources.theporndb} (confidence: ${scrapedSources.confidence.theporndb.toFixed(2)})`,
+            metadataRichness: metadataRichness.toFixed(2),
+            hasDirectStashDB: hasDirectStashDBIdentifier,
+            hasDirectThePornDB: hasDirectThePornDBIdentifier
+        });
+        
+        return scrapedSources;
+    }
+
+    // Fallback UI-based scraper detection (only used if GraphQL fails)
+    async function detectAlreadyScrapedSourcesFallback() {
+        console.log('🔍 Fallback UI-based scraper detection in progress...');
+        
+        const scrapedSources = {
+            stashdb: false,
+            theporndb: false,
+            confidence: {
+                stashdb: 0,
+                theporndb: 0
+            }
         };
         
         try {
-            // Strategy 1: Check for StashDB indicators
-            // Look for StashDB-specific data patterns in the scene info
-            const stashdbIndicators = [
-                // StashDB scene ID pattern
+            // Check for metadata presence indicators via UI
+            const metadataChecks = [
+                // Check for populated title field (not just filename)
                 () => {
-                    const sceneInfo = document.querySelector('.scene-info, .detail-group, .scene-details');
-                    if (sceneInfo) {
-                        const text = sceneInfo.textContent || '';
-                        // StashDB IDs are typically UUIDs
-                        return /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(text);
+                    const titleElements = document.querySelectorAll('input[placeholder*="title" i], input[id*="title" i], .title input, .scene-title input');
+                    for (const element of titleElements) {
+                        const value = element.value?.trim() || '';
+                        // If title is present and not just a filename pattern
+                        if (value && value.length > 5 && !value.match(/^\d{4}-\d{2}-\d{2}/) && !value.includes('.mp4') && !value.includes('.mkv')) {
+                            console.log('✅ Found meaningful title:', value.substring(0, 50));
+                            return 0.8; // High confidence for enriched title
+                        }
                     }
-                    return false;
+                    return 0;
                 },
                 
-                // Look for StashDB URLs in scene details
+                // Check for performers/actors
                 () => {
-                    const links = document.querySelectorAll('a[href*="stashdb"]');
-                    return links.length > 0;
+                    const performerElements = document.querySelectorAll('.performers .tag, .performer-tag, .scene-performers .tag, [class*="performer"] .tag');
+                    if (performerElements.length > 0) {
+                        console.log('✅ Found performers:', performerElements.length);
+                        return 0.9; // Very high confidence for performer tags
+                    }
+                    return 0;
                 },
                 
-                // Check for populated fields that suggest StashDB scraping
+                // Check for tags
                 () => {
-                    // Look for studio, performers, or tags that have been populated
-                    const studioField = document.querySelector('.studio, [data-testid*="studio"]');
-                    const performerFields = document.querySelectorAll('.performer, [data-testid*="performer"]');
-                    const tagFields = document.querySelectorAll('.tag, [data-testid*="tag"]');
-                    
-                    return (studioField?.textContent?.trim()?.length > 0) || 
-                           (performerFields.length > 0) || 
-                           (tagFields.length > 5); // More than 5 tags suggests scraping
+                    const tagElements = document.querySelectorAll('.tags .tag, .scene-tags .tag, [class*="tags"] .tag');
+                    if (tagElements.length > 2) { // More than just basic tags
+                        console.log('✅ Found content tags:', tagElements.length);
+                        return 0.7; // Good confidence for multiple tags
+                    }
+                    return 0;
+                },
+                
+                // Check for studio information
+                () => {
+                    const studioElements = document.querySelectorAll('.studio .tag, .scene-studio .tag, [class*="studio"] .tag, input[placeholder*="studio" i]');
+                    for (const element of studioElements) {
+                        const text = element.textContent?.trim() || element.value?.trim() || '';
+                        if (text && text.length > 2) {
+                            console.log('✅ Found studio information:', text);
+                            return 0.6; // Moderate confidence for studio
+                        }
+                    }
+                    return 0;
+                },
+                
+                // Check for scene details/description
+                () => {
+                    const detailElements = document.querySelectorAll('textarea[placeholder*="details" i], textarea[id*="details" i], .details textarea, .scene-details textarea');
+                    for (const element of detailElements) {
+                        const value = element.value?.trim() || '';
+                        if (value && value.length > 50) { // Substantial description
+                            console.log('✅ Found scene details/description');
+                            return 0.5; // Moderate confidence for description
+                        }
+                    }
+                    return 0;
+                },
+                
+                // Check for rating
+                () => {
+                    const ratingElements = document.querySelectorAll('input[type="number"][placeholder*="rating" i], .rating input, .scene-rating input');
+                    for (const element of ratingElements) {
+                        const value = element.value?.trim() || '';
+                        if (value && parseFloat(value) > 0) {
+                            console.log('✅ Found rating:', value);
+                            return 0.4; // Some confidence for rating
+                        }
+                    }
+                    return 0;
                 }
             ];
             
-            // Strategy 2: Check for ThePornDB indicators
-            const theporndbIndicators = [
-                // Look for ThePornDB-specific data patterns
-                () => {
-                    const sceneInfo = document.querySelector('.scene-info, .detail-group, .scene-details');
-                    if (sceneInfo) {
-                        const text = sceneInfo.textContent || '';
-                        // ThePornDB tends to have specific naming patterns
-                        return text.includes('ThePornDB') || text.includes('TPDB');
-                    }
-                    return false;
-                },
+            // Calculate overall confidence based on metadata presence
+            let totalConfidence = 0;
+            let checkCount = 0;
+            
+            for (const check of metadataChecks) {
+                const score = check();
+                totalConfidence += score;
+                if (score > 0) checkCount++;
+            }
+            
+            // Normalize confidence - if we have multiple metadata indicators, it's likely scraped
+            const averageConfidence = checkCount > 0 ? totalConfidence / metadataChecks.length : 0;
+            
+            console.log(`📊 UI metadata analysis: ${checkCount}/${metadataChecks.length} indicators found, confidence: ${averageConfidence.toFixed(2)}`);
+            
+            // If we have good metadata coverage, assume both scrapers could have contributed
+            // Use a threshold of 0.3 (meaning at least some meaningful metadata exists)
+            const hasMetadata = averageConfidence >= 0.3;
+            
+            if (hasMetadata) {
+                // If metadata exists, we can't easily distinguish which scraper provided what
+                // So we'll assume both might have been used if they're enabled
+                const config = {
+                    stashdb: getConfig(CONFIG_KEYS.AUTO_SCRAPE_STASHDB),
+                    theporndb: getConfig(CONFIG_KEYS.AUTO_SCRAPE_THEPORNDB)
+                };
                 
-                // Look for ThePornDB URLs
-                () => {
-                    const links = document.querySelectorAll('a[href*="theporndb"], a[href*="tpdb"]');
-                    return links.length > 0;
-                },
+                scrapedSources.stashdb = config.stashdb; // Assume scraped if enabled and metadata exists
+                scrapedSources.theporndb = config.theporndb; // Assume scraped if enabled and metadata exists
+                scrapedSources.confidence.stashdb = config.stashdb ? averageConfidence : 0;
+                scrapedSources.confidence.theporndb = config.theporndb ? averageConfidence : 0;
                 
-                // Check for ThePornDB-style metadata
-                () => {
-                    // ThePornDB often provides more detailed scene descriptions
-                    const description = document.querySelector('.scene-description, [data-testid*="description"]');
-                    if (description) {
-                        const text = description.textContent || '';
-                        // Long descriptions (>200 chars) often indicate ThePornDB scraping
-                        return text.length > 200;
-                    }
-                    return false;
-                }
-            ];
-            
-            // Test StashDB indicators
-            for (const indicator of stashdbIndicators) {
-                if (indicator()) {
-                    scrapedSources.stashdb = true;
-                    console.log('✅ StashDB data detected');
-                    break;
-                }
+                console.log('✅ UI analysis indicates scene has been enriched by scrapers');
+            } else {
+                console.log('📝 Little to no enriched metadata found - likely not scraped');
             }
             
-            // Test ThePornDB indicators
-            for (const indicator of theporndbIndicators) {
-                if (indicator()) {
-                    scrapedSources.theporndb = true;
-                    console.log('✅ ThePornDB data detected');
-                    break;
-                }
-            }
+            console.log('🔍 Fallback UI scraper detection results:', {
+                stashdb: `${scrapedSources.stashdb} (confidence: ${scrapedSources.confidence.stashdb.toFixed(2)})`,
+                theporndb: `${scrapedSources.theporndb} (confidence: ${scrapedSources.confidence.theporndb.toFixed(2)})`
+            });
             
-            // Strategy 3: Check URL or page metadata for scraper history
-            // Look for any data attributes or hidden fields that might indicate scraper usage
-            const sceneContainer = document.querySelector('.scene-details, .scene-page, .detail-group');
-            if (sceneContainer) {
-                const dataAttrs = sceneContainer.attributes;
-                for (let attr of dataAttrs) {
-                    if (attr.name.includes('stash') || attr.value.includes('stash')) {
-                        scrapedSources.stashdb = true;
-                    }
-                    if (attr.name.includes('porn') || attr.value.includes('porn')) {
-                        scrapedSources.theporndb = true;
-                    }
-                }
-            }
-            
-            console.log('🔍 Scraper detection results:', scrapedSources);
             return scrapedSources;
             
         } catch (error) {
-            console.log('⚠️ Error detecting scraped sources:', error.message);
-            // Return false for both to be safe and allow re-scraping
-            return { stashdb: false, theporndb: false };
+            console.warn('⚠️ Error in fallback UI scraper detection:', error);
+            return { stashdb: false, theporndb: false, confidence: { stashdb: 0, theporndb: 0 } };
         }
     }
 
     // Enhanced organized detection using multiple detection strategies
+    // Enhanced organized detection using GraphQL API (replaces UI-based detection)
     async function checkIfAlreadyOrganized() {
-        console.log('🔍 Comprehensive organized status check...');
+        console.log('🔍 Checking if scene is already organized...');
         
         try {
-            // Strategy 1: Look for explicit organized status indicators
-            const organizedIndicators = [
-                // Direct organized div (most reliable)
-                'div.organized',
-                '.scene-organized',
-                '.organized-indicator',
-                '.organized-badge',
-                '.status-organized',
-                
-                // Badge or label indicators
-                '.badge:contains("Organized")',
-                '.label:contains("Organized")',
-                '.tag:contains("Organized")',
-                '[title*="organized" i]',
-                '[aria-label*="organized" i]'
-            ];
+            // Use GraphQL-based detection for reliable results
+            const isOrganized = await getSceneOrganizedStatus();
             
-            for (const selector of organizedIndicators) {
-                const element = document.querySelector(selector);
-                if (element) {
-                    console.log('✅ Scene is organized - found indicator:', selector);
-                    return true;
-                }
+            if (isOrganized === null) {
+                console.log('⚠️ Could not determine organized status');
+                return false; // Assume not organized if we can't determine
             }
             
-            // Strategy 2: Check form fields and inputs
-            const formIndicators = [
-                // Checkbox-based organized toggle
-                'input[type="checkbox"][checked]:not([type="radio"])',
-                '.form-check-input[checked]',
-                '.organized-toggle input:checked',
-                '.organized-checkbox input:checked',
-                
-                // Toggle switch indicators  
-                '.toggle-switch.active',
-                '.switch-input:checked',
-                '.toggle.on'
-            ];
-            
-            for (const selector of formIndicators) {
-                const elements = document.querySelectorAll(selector);
-                for (const element of elements) {
-                    // Verify this is actually the organized field by checking context
-                    const context = element.closest('.form-group, .form-field, .input-group, .field, fieldset, label');
-                    if (context && context.textContent.toLowerCase().includes('organized')) {
-                        console.log('✅ Scene is organized - found checked organized toggle');
-                        return true;
-                    }
-                }
-            }
-            
-            // Strategy 3: Check organized button state using enhanced detection
-            const organizedButton = await Promise.race([
-                findOrganizedButton(),
-                new Promise((resolve) => setTimeout(() => resolve(null), 2000)) // 2 second timeout
-            ]);
-            
-            if (organizedButton) {
-                try {
-                    const computedStyle = window.getComputedStyle(organizedButton);
-                    const backgroundColor = computedStyle.backgroundColor;
-                    const color = computedStyle.color;
-                    const classes = organizedButton.className;
-                    
-                    console.log('📊 Organized button analysis:');
-                    console.log('  Classes:', classes);
-                    console.log('  Background:', backgroundColor);
-                    console.log('  Text color:', color);
-                    
-                    // Enhanced active state detection
-                    const isActive = (
-                        // CSS class indicators
-                        classes.includes('active') ||
-                        classes.includes('pressed') ||
-                        classes.includes('selected') ||
-                        classes.includes('btn-warning') ||
-                        classes.includes('btn-orange') ||
-                        classes.includes('btn-primary') ||
-                        
-                        // Background color analysis (orange/yellow indicates organized)
-                        backgroundColor.includes('rgb(255, 193, 7)') ||  // Bootstrap warning
-                        backgroundColor.includes('rgb(245, 158, 11)') ||  // Tailwind orange
-                        backgroundColor.includes('rgb(251, 146, 60)') ||  // Light orange
-                        backgroundColor.includes('rgb(217, 119, 6)') ||   // Dark orange
-                        backgroundColor.includes('rgb(180, 83, 9)') ||    // Brown-orange
-                        backgroundColor.includes('rgb(146, 64, 14)') ||   // Brown
-                        backgroundColor.includes('rgb(255, 235, 59)') ||  // Yellow
-                        
-                        // Intelligent color detection for orange/yellow hues
-                        (() => {
-                            try {
-                                const rgbMatch = backgroundColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-                                if (rgbMatch) {
-                                    const [, r, g, b] = rgbMatch.map(Number);
-                                    // Orange/amber detection: high red, moderate green, low blue
-                                    const isOrange = r > 200 && g > 100 && g < 220 && b < 100;
-                                    // Yellow detection: high red, high green, low blue
-                                    const isYellow = r > 200 && g > 200 && b < 150;
-                                    
-                                    if (isOrange || isYellow) {
-                                        console.log(`🎯 Detected ${isOrange ? 'orange' : 'yellow'} button color (organized)`);
-                                        return true;
-                                    }
-                                }
-                                return false;
-                            } catch (colorError) {
-                                return false;
-                            }
-                        })()
-                    );
-                    
-                    if (isActive) {
-                        console.log('✅ Scene is organized - button shows active state');
-                        return true;
-                    }
-                    
-                    // Additional check: if button is in a container marked as organized
-                    const organizedContainer = organizedButton.closest('.organized, .scene-organized');
-                    if (organizedContainer) {
-                        console.log('✅ Scene is organized - button in organized container');
-                        return true;
-                    }
-                    
-                } catch (styleError) {
-                    console.log('⚠️ Error analyzing button style:', styleError.message);
-                }
-            }
-            
-            // Strategy 4: Check URL parameters
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('organized') === 'true') {
-                console.log('✅ Scene is organized - URL parameter indicates organized');
+            if (isOrganized) {
+                console.log('✅ Scene is already organized');
                 return true;
+            } else {
+                console.log('📝 Scene is not organized');
+                return false;
             }
-            
-            // Strategy 5: Check for data attributes or metadata
-            const sceneContainer = document.querySelector('.scene-details, .scene-page, .detail-group, .scene-tabs');
-            if (sceneContainer) {
-                const dataAttrs = Array.from(sceneContainer.attributes);
-                for (const attr of dataAttrs) {
-                    if ((attr.name.includes('organized') || attr.value.includes('organized')) && 
-                        (attr.value === 'true' || attr.value === '1')) {
-                        console.log('✅ Scene is organized - found data attribute');
-                        return true;
-                    }
-                }
-            }
-            
-            console.log('ℹ️ Scene not organized - proceeding with automation');
-            return false;
             
         } catch (error) {
-            console.warn('⚠️ Error checking organized status:', error.message);
-            // Default to not organized to allow automation
-            return false;
+            console.error('❌ Error checking organized status:', error);
+            return false; // Assume not organized on error
         }
     }
 
@@ -942,12 +2246,12 @@
         return new Promise((resolve) => {
             console.log('⏳ WAITING FOR USER: Please review the scraped data and click APPLY when ready...');
             
-            // Create a visual indicator
+            // Create a visual indicator positioned to avoid overlap
             const indicator = document.createElement('div');
             indicator.id = 'user-apply-indicator';
             indicator.style.position = 'fixed';
             indicator.style.top = '20px';
-            indicator.style.right = '20px';
+            indicator.style.left = '20px';  // Move to left side to avoid notifications
             indicator.style.transform = 'none';
             indicator.style.backgroundColor = '#ff6b35';
             indicator.style.color = 'white';
@@ -1108,252 +2412,427 @@
 
     async function automateComplete() {
         try {
-            console.log('🚀 Starting Smart Automation (detects already scraped sources)...');
+            startAutomation(); // Initialize automation state and UI
+            
+            console.log('🚀 Starting Advanced Smart Automation...');
+            notifications.show('🚀 Starting automation process...', 'info');
+            
+            // Check configuration - use separate settings for clarity
+            const settings = {
+                enableStashDB: getConfig(CONFIG_KEYS.AUTO_SCRAPE_STASHDB),
+                enableThePornDB: getConfig(CONFIG_KEYS.AUTO_SCRAPE_THEPORNDB),
+                autoOrganize: getConfig(CONFIG_KEYS.AUTO_ORGANIZE),
+                autoApply: getConfig(CONFIG_KEYS.AUTO_APPLY_CHANGES),
+                skipAlreadyScraped: getConfig(CONFIG_KEYS.SKIP_ALREADY_SCRAPED),
+                minimizeWhenComplete: getConfig(CONFIG_KEYS.MINIMIZE_WHEN_COMPLETE)
+            };
+            
+            console.log('📋 Settings:', settings);
             
             // === PHASE 0: Detect already scraped sources ===
-            console.log('🔍 PHASE 0: Detecting already scraped sources...');
-            const alreadyScraped = await detectAlreadyScrapedSources();
+            console.log('🔍 PHASE 0: Enhanced scraper detection...');
+            notifications.show('🔍 Analyzing existing metadata...', 'info');
             
-            let needsStashDB = !alreadyScraped.stashdb;
-            let needsThePornDB = !alreadyScraped.theporndb;
+            checkCancellation(); // Check if user cancelled
+            
+            let alreadyScraped = { stashDB: false, thePornDB: false };
+            if (settings.skipAlreadyScraped) {
+                const detectionResults = await detectAlreadyScrapedSources();
+                // Fix case sensitivity issue - detection returns lowercase, but logic expects mixed case
+                alreadyScraped = {
+                    stashDB: detectionResults.stashdb,
+                    thePornDB: detectionResults.theporndb
+                };
+                checkCancellation(); // Check after metadata analysis
+            }
+            
+            // Determine what actions are needed - each scraper is evaluated independently
+            let needsStashDB = settings.enableStashDB && !alreadyScraped.stashDB;
+            let needsThePornDB = settings.enableThePornDB && !alreadyScraped.thePornDB;
+            
+            console.log('📋 Independent scraper evaluation:');
+            console.log(`   StashDB: enabled=${settings.enableStashDB}, already_scraped=${alreadyScraped.stashDB}, needs_scraping=${needsStashDB}`);
+            console.log(`   ThePornDB: enabled=${settings.enableThePornDB}, already_scraped=${alreadyScraped.thePornDB}, needs_scraping=${needsThePornDB}`);
             
             if (!needsStashDB && !needsThePornDB) {
-                console.log('✅ Both StashDB and ThePornDB data already detected - skipping automation');
+                console.log('✅ All configured scrapers already processed or disabled');
+                notifications.show('✅ Scene already has all required metadata', 'success');
                 
-                // Check if organized, if not, just mark as organized
-                const alreadyOrganized = await checkIfAlreadyOrganized();
-                if (!alreadyOrganized) {
-                    console.log('📦 Scene not organized - marking as organized...');
-                    const organizedButton = await findOrganizedButton();
-                    if (organizedButton) {
-                        organizedButton.click();
-                        console.log('✅ Marked scene as organized');
-                        await sleep(1000);
+                // Check if organized, if not and auto-organize is enabled
+                if (settings.autoOrganize) {
+                    checkCancellation();
+                    const alreadyOrganized = await checkIfAlreadyOrganized();
+                    if (!alreadyOrganized) {
+                        console.log('📦 Auto-organizing scene...');
+                        notifications.show('📦 Marking scene as organized...', 'info');
+                        const organized = await organizeScene();
+                        if (organized) {
+                            console.log('✅ Marked scene as organized');
+                            notifications.show('✅ Scene marked as organized', 'success');
+                            await sleep(1000);
+                        } else {
+                            console.log('❌ Failed to mark scene as organized');
+                            notifications.show('❌ Failed to organize scene', 'error');
+                        }
                     }
                 }
                 
-                console.log('🎉 Automation complete - removing panel...');
-                await removeAutomationPanel();
+                console.log('🎉 Automation complete - managing UI...');
+                completeAutomation();
+                if (settings.minimizeWhenComplete) {
+                    uiManager.minimizePanel();
+                    notifications.show('🎉 Automation complete! UI minimized.', 'success');
+                } else {
+                    await removeAutomationPanel();
+                    notifications.show('🎉 Automation complete!', 'success');
+                }
                 return;
             }
             
             console.log(`📋 Scraping plan: StashDB=${needsStashDB ? 'NEEDED' : 'SKIP'}, ThePornDB=${needsThePornDB ? 'NEEDED' : 'SKIP'}`);
+            notifications.show(`📋 Plan: ${needsStashDB ? 'StashDB ✓' : ''} ${needsThePornDB ? 'ThePornDB ✓' : ''}`, 'info');
             
-            // Click the "Edit" button only if we need to scrape something
+            // Enter edit mode
+            checkCancellation();
+            notifications.show('✏️ Entering edit mode...', 'info');
             const editSuccess = await clickElementOptimized(['a[data-rb-event-key="scene-edit-panel"]'], 'Edit button');
             if (!editSuccess) {
+                notifications.show('❌ Could not enter edit mode', 'error');
+                stopAutomation();
                 await removeAutomationPanel();
                 return;
             }
             await sleep(1000);
 
-            // === PHASE 1: StashDB Automation (only if needed) ===
+            // === PHASE 1: StashDB Automation ===
             if (needsStashDB) {
-                console.log('📋 PHASE 1: StashDB Automation (missing data detected)');
+                checkCancellation(); // Check before starting phase
+                console.log('📋 PHASE 1: StashDB Automation');
+                notifications.show('📊 Scraping StashDB...', 'info');
                 
-                // Wait for edit panel to load and find scrape button
-                console.log('Looking for scrape button...');
-                let scrapeButton = null;
-                let attempts = 0;
-                const maxAttempts = 10;
+                const stashDBSuccess = await performStashDBScraping();
+                checkCancellation(); // Check after scraping
                 
-                while (!scrapeButton && attempts < maxAttempts) {
-                    scrapeButton = await findScrapeButton();
-                    if (!scrapeButton) {
-                        console.log(`Scrape button not found, attempt ${attempts + 1}/${maxAttempts}`);
-                        await sleep(500);
-                        attempts++;
-                    }
+                if (!stashDBSuccess) {
+                    notifications.show('⚠️ StashDB scraping encountered issues', 'warning');
                 }
                 
-                if (!scrapeButton) {
-                    console.error('Could not find Scrape button after all attempts');
-                    await removeAutomationPanel();
-                    return;
-                }
-                
-                scrapeButton.click();
-                console.log('Successfully clicked scrape button');
-                await sleep(1000);
-
-                // Click on the dropdown option with the text "stashdb.org"
-                const dropdownOptions = document.querySelectorAll('.dropdown-menu.show a.dropdown-item');
-                for (const option of dropdownOptions) {
-                    if (option.textContent.trim() === 'stashdb.org') {
-                        option.click();
-                        console.log("Clicking StashDB");
-                        break;
-                    }
-                }
-                await sleep(2500);
-
-                // Find and select all + tags (studios, performers, tags, etc) from StashDB
-                let plusButtons = document.querySelectorAll('button.minimal.ml-2.btn.btn-primary svg[data-prefix="fas"][data-icon="plus"]');
-                if (plusButtons.length > 0) {
-                    const totalButtons = plusButtons.length;
-                    console.log(`Total StashDB entries found: ${totalButtons}`);
-                    
-                    for (let i = 0; i < plusButtons.length; i++) {
-                        try {
-                            const button = plusButtons[i].closest('button');
-                            if (button) {
-                                button.click();
-                                console.log(`Clicking StashDB + Button ${i + 1}/${totalButtons}`);
-                                
-                                if (i < totalButtons - 1) {
-                                    await sleep(2000);
-                                } else {
-                                    console.log("Waiting a bit longer for the last StashDB tag");
-                                    await sleep(3000);
-                                }
-                            }
-                        } catch (error) {
-                            console.error('Error clicking StashDB + button:', error);
-                            await sleep(2000);
-                        }
-                    }
+                // Wait for user to apply changes unless auto-apply is enabled
+                if (!settings.autoApply) {
+                    console.log('🛑 PHASE 1.5: Waiting for user to review StashDB changes...');
+                    notifications.show('⏳ Please review StashDB data and click APPLY', 'info', 8000);
+                    await waitForUserApply();
+                    checkCancellation(); // Check after user action
                 } else {
-                    console.log('No new entries found from StashDB');
+                    notifications.show('⚡ Auto-applying StashDB changes...', 'info');
+                    await applyChanges();
+                    checkCancellation(); // Check after auto-apply
                 }
-                
-                // === PHASE 2: Wait for user to click Apply ===
-                console.log('🛑 PHASE 2: Waiting for user to click APPLY...');
-                await waitForUserApply();
             } else {
-                console.log('⏭️ PHASE 1: Skipping StashDB (data already present)');
+                console.log('⏭️ PHASE 1: Skipping StashDB (already present or disabled)');
             }
             
-            // === PHASE 3: ThePornDB scraping (only if needed) ===
+            // === PHASE 2: ThePornDB Automation ===
             if (needsThePornDB) {
-                console.log('🎬 PHASE 3: ThePornDB scraping (missing data detected)...');
+                checkCancellation(); // Check before starting phase
+                console.log('🎬 PHASE 2: ThePornDB Automation');
+                notifications.show('🎬 Scraping ThePornDB...', 'info');
                 
-                // Find scrape button again
-                let scrapeButton = await findScrapeButton();
-                if (scrapeButton) {
-                    // Direct click since we already have the element
-                    scrapeButton.click();
-                    console.log('Successfully clicked scrape button for ThePornDB');
-                    
-                    // Wait for React component to render dropdown
-                    await sleep(STASH_CONFIG.REACT_RENDER_DELAY);
-                    
-                    // Check if scrape button has a dropdown that needs explicit opening
-                    const dropdownToggle = scrapeButton.querySelector('.dropdown-toggle') || 
-                                         scrapeButton.parentElement?.querySelector('[data-toggle="dropdown"]');
-                    if (dropdownToggle) {
-                        console.log('🔽 Opening scraper dropdown...');
-                        dropdownToggle.click();
-                        await sleep(STASH_CONFIG.UI_TRANSITION_DELAY);
-                    }
-                    
-                    // Wait a bit more for dropdown to fully render
-                    await sleep(500);
-                    
-                    // Use optimized ThePornDB selection
-                    const thePornDBSelected = await selectThePornDBOption();
-                    
-                    if (thePornDBSelected) {
-                        // Wait for scraper operation to complete
-                        await sleep(STASH_CONFIG.SCRAPER_OPERATION_DELAY);
-                        
-                        // Find and select all + tags from ThePornDB using optimized detection
-                        console.log('🔍 Searching for ThePornDB entries...');
-                        const plusButtonSelectors = [
-                            'button.minimal.ml-2.btn.btn-primary svg[data-icon="plus"]',
-                            '.scraper-result button svg[data-icon="plus"]',
-                            '.entity-result button.btn-primary',
-                            'button.btn-primary svg.fa-plus'
-                        ];
-                        
-                        let plusButtons = [];
-                        for (const selector of plusButtonSelectors) {
-                            plusButtons = document.querySelectorAll(selector);
-                            if (plusButtons.length > 0) {
-                                console.log(`✅ Found ${plusButtons.length} ThePornDB entries with selector: ${selector}`);
-                                break;
-                            }
-                        }
-                        if (plusButtons.length > 0) {
-                            const totalButtons = plusButtons.length;
-                            console.log(`Total ThePornDB entries found: ${totalButtons}`);
-                            
-                            for (let i = 0; i < plusButtons.length; i++) {
-                                try {
-                                    const button = plusButtons[i].closest('button');
-                                    if (button) {
-                                        button.click();
-                                        console.log(`Clicking ThePornDB + Button ${i + 1}/${totalButtons}`);
-                                        
-                                        if (i < totalButtons - 1) {
-                                            await sleep(2000);
-                                        } else {
-                                            console.log("Waiting a bit longer for the last ThePornDB tag");
-                                            await sleep(3000);
-                                        }
-                                    }
-                                } catch (error) {
-                                    console.error('Error clicking ThePornDB + button:', error);
-                                    await sleep(2000);
-                                }
-                            }
-                        } else {
-                            console.log('No new entries found from ThePornDB');
-                        }
-                        
-                        // Wait for user to apply ThePornDB changes
-                        console.log('🛑 Waiting for user to click APPLY for ThePornDB changes...');
-                        await waitForUserApply();
-                    }
+                const thePornDBSuccess = await performThePornDBScraping();
+                checkCancellation(); // Check after scraping
+                
+                if (!thePornDBSuccess) {
+                    notifications.show('⚠️ ThePornDB scraping encountered issues', 'warning');
+                }
+                
+                // Wait for user to apply changes unless auto-apply is enabled
+                if (!settings.autoApply) {
+                    console.log('🛑 PHASE 2.5: Waiting for user to review ThePornDB changes...');
+                    notifications.show('⏳ Please review ThePornDB data and click APPLY', 'info', 8000);
+                    await waitForUserApply();
+                    checkCancellation(); // Check after user action
                 } else {
-                    console.warn('Could not find scrape button for ThePornDB');
+                    notifications.show('⚡ Auto-applying ThePornDB changes...', 'info');
+                    await applyChanges();
+                    checkCancellation(); // Check after auto-apply
                 }
             } else {
-                console.log('⏭️ PHASE 3: Skipping ThePornDB (data already present)');
+                console.log('⏭️ PHASE 2: Skipping ThePornDB (already present or disabled)');
             }
             
-            // === PHASE 4: Save and mark as organized ===
-            console.log('💾 PHASE 4: Save and mark as organized');
+            // === PHASE 3: Save and organize ===
+            checkCancellation(); // Check before final phase
+            console.log('💾 PHASE 3: Final save and organize');
+            notifications.show('💾 Saving changes...', 'info');
             
-            // Click the "Save" button
-            console.log('Looking for Save button...');
-            let saveButton = await findSaveButton();
-            if (!saveButton) {
-                console.error('Could not find Save button');
-                await removeAutomationPanel();
+            // Save the scene
+            const saveSuccess = await saveScene();
+            checkCancellation(); // Check after save
+            
+            if (!saveSuccess) {
+                notifications.show('❌ Failed to save scene', 'error');
+                stopAutomation();
                 return;
             }
-            saveButton.click();
-            console.log('Successfully clicked Save button');
-            await sleep(1000);
-
-            // Check if already organized before trying to click
-            const alreadyOrganized = await checkIfAlreadyOrganized();
-            if (alreadyOrganized) {
-                console.log('🎯 Scene is already marked as organized - skipping organized button click');
-            } else {
-                // Click the "Organized" button
-                console.log('Looking for Organized button...');
-                let organizedButton = await findOrganizedButton();
-                if (!organizedButton) {
-                    console.log('Could not find Organized button - scene may already be organized');
+            
+            // Auto-organize if enabled
+            if (settings.autoOrganize) {
+                const alreadyOrganized = await checkIfAlreadyOrganized();
+                if (!alreadyOrganized) {
+                    console.log('📦 Auto-organizing scene...');
+                    notifications.show('📦 Marking as organized...', 'info');
+                    const organized = await organizeScene();
+                    if (organized) {
+                        console.log('✅ Marked scene as organized');
+                        await sleep(1000);
+                    } else {
+                        console.log('❌ Failed to mark scene as organized');
+                    }
                 } else {
-                    organizedButton.click();
-                    console.log('Successfully clicked Organized button');
-                    await sleep(1000);
+                    console.log('🎯 Scene already organized');
                 }
             }
             
-            // === PHASE 5: Cleanup and completion ===
-            console.log('🎉 Smart automation finished successfully!');
-            console.log('🧹 Removing automation panel...');
+            // === PHASE 4: Completion and UI management ===
+            console.log('🎉 Advanced automation complete!');
+            completeAutomation(); // Clean up automation state
             
-            // Wait a moment for everything to settle, then remove the panel
-            await sleep(2000);
-            await removeAutomationPanel();
+            if (settings.minimizeWhenComplete) {
+                notifications.show('🎉 Automation complete! UI minimized. Click the button to expand.', 'success', 6000);
+                await sleep(1000);
+                uiManager.minimizePanel();
+            } else {
+                notifications.show('🎉 Automation complete!', 'success');
+                await sleep(1000);
+                // Recreate the full panel instead of removing it
+                setTimeout(() => {
+                    createOptimizedButtons();
+                }, 500);
+            }
             
         } catch (error) {
-            console.error('❌ Error in smart automation:', error);
-            await removeAutomationPanel();
+            console.error('❌ Error in advanced automation:', error);
+            
+            if (error.message === 'Automation cancelled by user') {
+                // Don't show error notification for user cancellation
+                console.log('🛑 Automation was cancelled by user');
+                // UI restoration is handled by stopAutomation()
+            } else {
+                notifications.show(`❌ Automation error: ${error.message}`, 'error');
+                stopAutomation(); // Clean up automation state and restore UI
+            }
+        }
+    }
+
+    // Helper functions for modular scraping
+    async function performStashDBScraping() {
+        try {
+            checkCancellation(); // Check before starting
+            
+            // Find and click scrape button
+            let scrapeButton = await findScrapeButton();
+            if (!scrapeButton) {
+                throw new Error('Could not find scrape button');
+            }
+            
+            scrapeButton.click();
+            console.log('✅ Clicked scrape button for StashDB');
+            await sleep(1000);
+
+            checkCancellation(); // Check after button click
+
+            // Select StashDB from dropdown
+            const dropdownOptions = document.querySelectorAll('.dropdown-menu.show a.dropdown-item');
+            let stashDBFound = false;
+            for (const option of dropdownOptions) {
+                if (option.textContent.trim() === 'stashdb.org') {
+                    option.click();
+                    console.log('✅ Selected StashDB from dropdown');
+                    notifications.show('📊 Connecting to StashDB...', 'info');
+                    stashDBFound = true;
+                    break;
+                }
+            }
+            
+            if (!stashDBFound) {
+                throw new Error('StashDB option not found in dropdown');
+            }
+            
+            await sleep(2500);
+            checkCancellation(); // Check before processing entries
+
+            // Find and click all + buttons for StashDB entries
+            const plusButtons = document.querySelectorAll('button.minimal.ml-2.btn.btn-primary svg[data-prefix="fas"][data-icon="plus"]');
+            if (plusButtons.length > 0) {
+                const totalButtons = plusButtons.length;
+                console.log(`📊 Found ${totalButtons} StashDB entries to process`);
+                notifications.show(`📊 Adding ${totalButtons} StashDB entries...`, 'info');
+                
+                for (let i = 0; i < plusButtons.length; i++) {
+                    checkCancellation(); // Check before each entry
+                    
+                    try {
+                        const button = plusButtons[i].closest('button');
+                        if (button) {
+                            button.click();
+                            console.log(`✅ Added StashDB entry ${i + 1}/${totalButtons}`);
+                            
+                            if (i < totalButtons - 1) {
+                                await sleep(2000);
+                            } else {
+                                await sleep(3000);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('❌ Error adding StashDB entry:', error);
+                        await sleep(2000);
+                    }
+                }
+                
+                notifications.show('✅ StashDB scraping complete', 'success');
+            } else {
+                console.log('ℹ️ No new StashDB entries found');
+                notifications.show('ℹ️ No new StashDB data found', 'info');
+            }
+            
+            return true;
+        } catch (error) {
+            if (error.message === 'Automation cancelled by user') {
+                throw error; // Re-throw cancellation error
+            }
+            console.error('❌ StashDB scraping failed:', error);
+            notifications.show(`❌ StashDB error: ${error.message}`, 'error');
+            return false;
+        }
+    }
+
+    async function performThePornDBScraping() {
+        try {
+            checkCancellation(); // Check before starting
+            
+            // Find scrape button again
+            let scrapeButton = await findScrapeButton();
+            if (!scrapeButton) {
+                throw new Error('Could not find scrape button for ThePornDB');
+            }
+            
+            scrapeButton.click();
+            console.log('✅ Clicked scrape button for ThePornDB');
+            await sleep(STASH_CONFIG.REACT_RENDER_DELAY);
+            
+            checkCancellation(); // Check after button click
+            
+            // Handle dropdown opening if needed
+            const dropdownToggle = scrapeButton.querySelector('.dropdown-toggle') || 
+                                 scrapeButton.parentElement?.querySelector('[data-toggle="dropdown"]');
+            if (dropdownToggle) {
+                console.log('🔽 Opening scraper dropdown...');
+                dropdownToggle.click();
+                await sleep(STASH_CONFIG.UI_TRANSITION_DELAY);
+            }
+            
+            await sleep(500);
+            
+            // Select ThePornDB option
+            const thePornDBSelected = await selectThePornDBOption();
+            if (!thePornDBSelected) {
+                throw new Error('Could not select ThePornDB option');
+            }
+            
+            notifications.show('🎬 Connecting to ThePornDB...', 'info');
+            await sleep(STASH_CONFIG.SCRAPER_OPERATION_DELAY);
+            
+            checkCancellation(); // Check before processing entries
+            
+            // Find and process ThePornDB entries
+            const plusButtonSelectors = [
+                'button.minimal.ml-2.btn.btn-primary svg[data-icon="plus"]',
+                '.scraper-result button svg[data-icon="plus"]',
+                '.entity-result button.btn-primary',
+                'button.btn-primary svg.fa-plus'
+            ];
+            
+            let plusButtons = [];
+            for (const selector of plusButtonSelectors) {
+                plusButtons = document.querySelectorAll(selector);
+                if (plusButtons.length > 0) {
+                    console.log(`✅ Found ${plusButtons.length} ThePornDB entries with selector: ${selector}`);
+                    break;
+                }
+            }
+            
+            if (plusButtons.length > 0) {
+                const totalButtons = plusButtons.length;
+                console.log(`🎬 Found ${totalButtons} ThePornDB entries to process`);
+                notifications.show(`🎬 Adding ${totalButtons} ThePornDB entries...`, 'info');
+                
+                for (let i = 0; i < plusButtons.length; i++) {
+                    checkCancellation(); // Check before each entry
+                    
+                    try {
+                        const button = plusButtons[i].closest('button');
+                        if (button) {
+                            button.click();
+                            console.log(`✅ Added ThePornDB entry ${i + 1}/${totalButtons}`);
+                            
+                            if (i < totalButtons - 1) {
+                                await sleep(2000);
+                            } else {
+                                await sleep(3000);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('❌ Error adding ThePornDB entry:', error);
+                        await sleep(2000);
+                    }
+                }
+                
+                notifications.show('✅ ThePornDB scraping complete', 'success');
+            } else {
+                console.log('ℹ️ No new ThePornDB entries found');
+                notifications.show('ℹ️ No new ThePornDB data found', 'info');
+            }
+            
+            return true;
+        } catch (error) {
+            if (error.message === 'Automation cancelled by user') {
+                throw error; // Re-throw cancellation error
+            }
+            console.error('❌ ThePornDB scraping failed:', error);
+            notifications.show(`❌ ThePornDB error: ${error.message}`, 'error');
+            return false;
+        }
+    }
+
+    async function applyChanges() {
+        try {
+            const applyButton = await findApplyButton();
+            if (applyButton) {
+                applyButton.click();
+                console.log('✅ Applied changes automatically');
+                await sleep(STASH_CONFIG.GRAPHQL_MUTATION_DELAY);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('❌ Error applying changes:', error);
+            return false;
+        }
+    }
+
+    async function saveScene() {
+        try {
+            const saveButton = await findSaveButton();
+            if (saveButton) {
+                saveButton.click();
+                console.log('✅ Saved scene successfully');
+                await sleep(1000);
+                return true;
+            }
+            throw new Error('Save button not found');
+        } catch (error) {
+            console.error('❌ Error saving scene:', error);
+            return false;
         }
     }
 
@@ -1567,20 +3046,37 @@
         }
     }
 
-    // Enhanced Button Creation with Stash-optimized styling and intelligent display logic
+    // Enhanced Button Creation with Configuration Support and Smart UI Management
     async function createOptimizedButtons() {
+        console.log('🎯 DEBUG: *** createOptimizedButtons CALLED ***');
+        console.log('🔍 DEBUG: Current state - automationInProgress:', automationInProgress, 'userManuallyExpanded:', window.userManuallyExpanded);
+        
+        // Don't create buttons during active automation
+        if (automationInProgress) {
+            console.log('🚀 DEBUG: Automation in progress, skipping button creation in createOptimizedButtons');
+            console.log('🚀 Automation in progress, skipping button creation');
+            return;
+        }
+        
         // Prevent infinite loops with a cooldown mechanism
         const now = Date.now();
         if (window.lastButtonCreationAttempt && (now - window.lastButtonCreationAttempt) < 5000) {
+            console.log('🕒 DEBUG: Button creation cooldown active, skipping...');
             console.log('🕒 Button creation cooldown active, skipping...');
             return;
         }
+        console.log('🔄 DEBUG: Setting lastButtonCreationAttempt to:', now);
         window.lastButtonCreationAttempt = now;
 
-        // Remove existing panel if it exists
+        // Remove existing panels/buttons if they exist
         const existingPanel = document.querySelector('#stash-automation-panel');
         if (existingPanel) {
             existingPanel.remove();
+        }
+        
+        const existingMinimized = document.querySelector('#stash-minimized-button');
+        if (existingMinimized) {
+            existingMinimized.remove();
         }
 
         // Check if we're on a scene page
@@ -1593,122 +3089,122 @@
             return;
         }
 
-        // Check if the scene is already organized with timeout and proper error handling
-        let alreadyOrganized = false;
-        let organizedCheckFailed = false;
+        // Check configuration for intelligent UI behavior
+        const shouldMinimizeWhenComplete = getConfig(CONFIG_KEYS.MINIMIZE_WHEN_COMPLETE);
+        const skipAlreadyScraped = getConfig(CONFIG_KEYS.SKIP_ALREADY_SCRAPED);
+
+        // Enhanced organized and scraper status check
+        let shouldMinimize = false;
+        let statusMessage = '';
         
         try {
-            // Set a timeout for the organized check to prevent hanging
-            const organizedCheckPromise = checkIfAlreadyOrganized();
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Organized check timeout')), 3000)
-            );
-            
-            alreadyOrganized = await Promise.race([organizedCheckPromise, timeoutPromise]);
-            
-            if (alreadyOrganized) {
-                console.log('✅ Scene is already organized, skipping button creation');
-                return;
+            if (skipAlreadyScraped) {
+                console.log('🔍 Checking scene completion status for intelligent UI...');
+                
+                // Get user's automation preferences
+                const autoStashDB = getConfig(CONFIG_KEYS.AUTO_SCRAPE_STASHDB);
+                const autoThePornDB = getConfig(CONFIG_KEYS.AUTO_SCRAPE_THEPORNDB);
+                const autoOrganize = getConfig(CONFIG_KEYS.AUTO_ORGANIZE);
+                
+                console.log('📋 User automation settings:', { autoStashDB, autoThePornDB, autoOrganize });
+                
+                // Quick check first to avoid unnecessary detailed analysis
+                const quickStashDBCheck = document.querySelectorAll('a[href*="stashdb"], [data-stashdb], [title*="stashdb" i]').length > 0;
+                const quickThePornDBCheck = document.body.textContent.toLowerCase().includes('theporndb') || 
+                                          document.body.textContent.toLowerCase().includes('tpdb') ||
+                                          document.querySelectorAll('a[href*="porndb"], a[href*="tpdb"]').length > 0;
+                
+                console.log('🔍 Quick content check:', { quickStashDBCheck, quickThePornDBCheck });
+                
+                // Only minimize if we can confidently determine ALL automation is complete
+                // Use more conservative logic to prevent false positives
+                if (quickStashDBCheck && quickThePornDBCheck) {
+                    console.log('✅ Quick check: Both scrapers clearly detected - checking organization...');
+                    const organizedStatus = await checkIfAlreadyOrganized();
+                    console.log('📁 Organization status:', organizedStatus);
+                    
+                    // Only minimize if ALL enabled automation tasks are complete
+                    const allTasksComplete = (!autoStashDB || quickStashDBCheck) && 
+                                           (!autoThePornDB || quickThePornDBCheck) && 
+                                           (!autoOrganize || organizedStatus);
+                    
+                    if (allTasksComplete && shouldMinimizeWhenComplete) {
+                        console.log('✅ Scene fully processed - all enabled automation complete, minimizing per user setting');
+                        statusMessage = '✅ Fully processed';
+                        shouldMinimize = true;
+                    } else if (allTasksComplete) {
+                        console.log('✅ Scene fully processed but user prefers full panel');
+                        statusMessage = '✅ Fully processed (expanded)';
+                        shouldMinimize = false;
+                    } else {
+                        console.log('🔄 Scene has data but automation tasks remain');
+                        statusMessage = '🔄 Data detected, automation available';
+                        shouldMinimize = false;
+                    }
+                } else {
+                    // Only do detailed analysis if quick check doesn't find clear evidence
+                    console.log('🔍 Quick check inconclusive, performing detailed analysis...');
+                    const scrapedStatus = await detectAlreadyScrapedSources();
+                    const organizedStatus = await checkIfAlreadyOrganized();
+                    
+                    console.log('📊 Detailed analysis results:', {
+                        stashdb: scrapedStatus.stashdb,
+                        theporndb: scrapedStatus.theporndb,
+                        organized: organizedStatus
+                    });
+                    
+                    const hasStashDB = scrapedStatus.stashdb;
+                    const hasThePornDB = scrapedStatus.theporndb;
+                    const isOrganized = organizedStatus;
+                    
+                    // Check if all enabled automation tasks are complete
+                    const allTasksComplete = (!autoStashDB || hasStashDB) && 
+                                           (!autoThePornDB || hasThePornDB) && 
+                                           (!autoOrganize || isOrganized);
+                    
+                    if (allTasksComplete && shouldMinimizeWhenComplete) {
+                        console.log('✅ All enabled automation tasks are complete, minimizing per user setting');
+                        statusMessage = '✅ Fully processed';
+                        shouldMinimize = true;
+                    } else if (allTasksComplete) {
+                        console.log('✅ All enabled automation tasks are complete but user prefers full panel');
+                        statusMessage = '✅ Fully processed (expanded)';
+                        shouldMinimize = false;
+                    } else if (hasStashDB || hasThePornDB) {
+                        console.log('🔄 Some data detected, but automation tasks remain');
+                        statusMessage = '🔄 Partially processed';
+                        shouldMinimize = false;
+                    } else {
+                        console.log('❌ No automation data detected');
+                        statusMessage = '🚀 Ready for automation';
+                        shouldMinimize = false;
+                    }
+                }
             }
         } catch (error) {
-            console.log('⚠️ Could not reliably check organized status:', error.message);
-            organizedCheckFailed = true;
-            
-            // If we can't check organized status, look for obvious indicators before showing button
-            const obviousOrganizedIndicators = document.querySelectorAll('div.organized, .scene-toolbar .btn-warning, .scene-toolbar .btn-orange');
-            if (obviousOrganizedIndicators.length > 0) {
-                console.log('✅ Found obvious organized indicators, skipping button creation');
-                return;
-            }
+            console.log('⚠️ Could not check scene status:', error.message);
         }
 
-        console.log('🎯 Scene page detected and appears not organized - creating automation button');
-        
-        // Add a flag to prevent multiple button creation attempts
-        if (window.buttonCreationInProgress) {
-            console.log('🔄 Button creation already in progress, skipping...');
+        // If should minimize, create minimized button instead (unless user manually expanded)
+        if (shouldMinimize && !window.userManuallyExpanded) {
+            console.log('🎯 DEBUG: Auto-minimizing because shouldMinimize=true and userManuallyExpanded=false');
+            console.log('🎯 Creating minimized button based on completion status:', statusMessage);
+            uiManager.createMinimizedButton();
             return;
+        } else if (shouldMinimize && window.userManuallyExpanded) {
+            console.log('🔓 DEBUG: Should minimize but user manually expanded - keeping full panel');
+            console.log('🔓 User manually expanded - keeping full panel despite completion status');
+        } else {
+            console.log('📋 DEBUG: Not minimizing - shouldMinimize=', shouldMinimize, 'userManuallyExpanded=', window.userManuallyExpanded);
         }
-        window.buttonCreationInProgress = true;
 
-        try {
-            const panel = document.createElement('div');
-            panel.id = 'stash-automation-panel';
-            panel.style.cssText = `
-                position: fixed;
-                top: 10px;
-                right: 10px;
-                z-index: 10000;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                border-radius: 12px;
-                padding: 15px;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-                border: 1px solid rgba(255,255,255,0.2);
-                backdrop-filter: blur(10px);
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            `;
-
-            const title = document.createElement('div');
-            title.textContent = '🚀 Optimized Stash Automation';
-            title.style.cssText = `
-                color: white;
-                font-weight: bold;
-                font-size: 16px;
-                margin-bottom: 12px;
-                text-align: center;
-                text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-            `;
-            
-            const completeButton = document.createElement('button');
-            completeButton.textContent = '⚡ Complete Automation';
-            completeButton.style.cssText = `
-                width: 100%;
-                padding: 12px 20px;
-                background: linear-gradient(45deg, #28a745, #20c997);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 14px;
-                font-weight: bold;
-                transition: transform 0.2s, box-shadow 0.2s;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            `;
-            
-            completeButton.addEventListener('mouseenter', () => {
-                completeButton.style.transform = 'translateY(-2px)';
-                completeButton.style.boxShadow = '0 6px 20px rgba(0,0,0,0.3)';
-            });
-            
-            completeButton.addEventListener('mouseleave', () => {
-                completeButton.style.transform = 'translateY(0)';
-                completeButton.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)';
-            });
-            
-            completeButton.addEventListener('click', automateComplete);
-
-            const info = document.createElement('div');
-            info.textContent = 'StashDB + ThePornDB + Auto-organize';
-            info.style.cssText = `
-                color: rgba(255,255,255,0.8);
-                font-size: 12px;
-                text-align: center;
-                margin-top: 8px;
-            `;
-
-            panel.appendChild(title);
-            panel.appendChild(completeButton);
-            panel.appendChild(info);
-            document.body.appendChild(panel);
-            
-            console.log('🎨 Optimized automation panel created with enhanced UI');
-            
-        } catch (panelError) {
-            console.error('❌ Error creating automation panel:', panelError);
-        } finally {
-            // Always reset the flag
-            window.buttonCreationInProgress = false;
-        }
+        console.log('🎯 Creating automation panel via createOptimizedButtons -> UIManager');
+        
+        // Use UIManager to ensure consistent UI across all creation paths
+        uiManager.createFullPanelForced();
+        
+        // Reset the flag
+        window.buttonCreationInProgress = false;
     }
 
     // Wait for DOM to be ready and create optimized buttons
@@ -1730,13 +3226,40 @@
         mutationTimeout = setTimeout(() => {
             const isScenePage = window.location.pathname.includes('/scenes/');
             const hasAutomationPanel = document.querySelector('#stash-automation-panel');
+            const hasMinimizedButton = document.querySelector('#stash-minimized-button');
             
-            // Only create buttons if on scene page, no panel exists, and automation not completed
-            if (isScenePage && !hasAutomationPanel && !automationCompleted) {
+            console.log('🔍 DEBUG: DOM mutation check - isScenePage=', isScenePage, 'hasAutomationPanel=', !!hasAutomationPanel, 'hasMinimizedButton=', !!hasMinimizedButton, 'automationInProgress=', automationInProgress, 'automationCompleted=', automationCompleted, 'userManuallyExpanded=', window.userManuallyExpanded);
+            
+            // Only create buttons if:
+            // - On scene page
+            // - No existing automation UI
+            // - Automation not in progress
+            // - Automation not completed 
+            // - User hasn't manually expanded (to preserve user choice)
+            if (isScenePage && !hasAutomationPanel && !hasMinimizedButton && !automationInProgress && !automationCompleted && !window.userManuallyExpanded) {
+                console.log('✅ DEBUG: DOM mutation detected - calling createOptimizedButtons');
                 console.log('🔄 DOM mutation detected on scene page, checking for button creation...');
                 createOptimizedButtons();
-            } else if (automationCompleted) {
-                console.log('✅ Automation completed - skipping button recreation');
+            } else {
+                console.log('� DEBUG: DOM mutation detected but conditions not met for button creation');
+                if (automationInProgress) {
+                    console.log('   - Automation in progress, skipping button creation');
+                }
+                if (automationCompleted) {
+                    console.log('   - Automation completed, skipping button recreation');
+                }
+                if (window.userManuallyExpanded) {
+                    console.log('   - User manually expanded, preserving user choice');
+                }
+                if (hasAutomationPanel) {
+                    console.log('   - Automation panel already exists');
+                }
+                if (hasMinimizedButton) {
+                    console.log('   - Minimized button already exists');
+                }
+                if (!isScenePage) {
+                    console.log('   - Not on scene page');
+                }
             }
         }, 1000); // 1 second debounce
     });
@@ -1746,13 +3269,16 @@
     let navigationTimeout;
     const checkForNavigation = () => {
         if (window.location.pathname !== currentPath) {
+            const previousPath = currentPath;
             currentPath = window.location.pathname;
             console.log('🔄 Page navigation detected:', currentPath);
             
             // Reset completion flag on navigation to new scene
-            if (window.location.pathname.includes('/scenes/') && currentPath !== window.location.pathname) {
+            if (window.location.pathname.includes('/scenes/')) {
                 automationCompleted = false;
-                console.log('🔄 New scene detected - resetting automation flag');
+                automationInProgress = false; // Also reset in-progress flag
+                window.userManuallyExpanded = false; // Reset manual expansion flag for new scene
+                console.log('🔄 New scene detected - resetting automation flags');
             }
             
             // Debounce navigation changes
