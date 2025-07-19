@@ -119,4 +119,8 @@ async function clickElementOptimized(selectors, description, waitForMutation = f
 - **Greasemonkey/Tampermonkey**: Uses GM APIs for persistent storage and notifications
 - **External Scrapers**: StashDB (stashdb.org) and ThePornDB (metadataapi.net) integration
 
-Always test changes against actual Stash scenes to verify React component interaction patterns remain valid.
+Always test changes against actual Stash scenes to verify React component interaction patterns remain valid.[byterover-mcp]
+
+# important 
+always use byterover-retrive-knowledge tool to get the related context before any tasks 
+always use byterover-store-knowledge to store all the critical informations after sucessful tasks
