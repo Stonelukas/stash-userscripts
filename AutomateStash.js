@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptimizedStash
-// @version      3.4.0-improved
-// @description  Advanced Stash Scene Automation - Improved with bug fixes and optimizations
+// @version      3.4.1-critical-fixes
+// @description  Advanced Stash Scene Automation - Critical fixes for minimize button and ThePornDB timing
 // @author       You
 // @match        http://localhost:9998/scenes/*
 // @exclude      http://localhost:9998/scenes/markers?*
@@ -74,7 +74,9 @@
             reaction: 200,
             graphql: 500,
             ui: 300,
-            scraper: 1000
+            scraper: 1000,
+            theporndb_wait: 15000, // Max wait time for ThePornDB metadata population
+            metadata_check: 500    // Interval for checking metadata changes
         }
     };
 
@@ -2067,6 +2069,82 @@ Example usage:
             console.log('✅ UIManager cleanup completed');
         }
 
+        // Simple minimized button creation for fallback scenarios
+        createSimpleMinimizedButton() {
+            // Remove existing minimized button
+            const existingMin = document.querySelector('#stash-minimized-button');
+            if (existingMin) existingMin.remove();
+
+            const minButton = document.createElement('button');
+            minButton.id = 'stash-minimized-button';
+            minButton.textContent = '📱 AutomateStash';
+            minButton.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 10000;
+                background: #667eea;
+                color: white;
+                border: none;
+                padding: 10px 15px;
+                border-radius: 25px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: bold;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+                transition: all 0.2s ease;
+            `;
+
+            // Simple expand on click
+            minButton.addEventListener('click', () => {
+                Logger.info('Expand button clicked');
+                minButton.remove();
+                const panel = document.querySelector('#stash-automation-panel');
+                if (panel) {
+                    panel.style.display = 'block';
+                } else {
+                    // Recreate panel if it doesn't exist
+                    if (window.uiManager && typeof window.uiManager.createFullPanelForced === 'function') {
+                        window.uiManager.createFullPanelForced();
+                    }
+                }
+            });
+
+            document.body.appendChild(minButton);
+            this.minimizedButton = minButton;
+            Logger.info('Simple minimized button created');
+        }
+
+        // Emergency minimized button creation for ultimate fallback
+        createEmergencyMinimizedButton() {
+            const existingMin = document.querySelector('#stash-minimized-button');
+            if (existingMin) existingMin.remove();
+
+            const minButton = document.createElement('button');
+            minButton.id = 'stash-minimized-button';
+            minButton.textContent = '📱 AutomateStash';
+            minButton.style.cssText = `
+                position: fixed; bottom: 20px; right: 20px; z-index: 10000;
+                background: #667eea; color: white; border: none; padding: 10px 15px;
+                border-radius: 25px; cursor: pointer; font-size: 14px; font-weight: bold;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: all 0.2s ease;
+            `;
+
+            minButton.addEventListener('click', () => {
+                Logger.info('Emergency expand button clicked');
+                minButton.remove();
+                const panel = document.querySelector('#stash-automation-panel');
+                if (panel) {
+                    panel.style.display = 'block';
+                } else if (window.uiManager?.createFullPanelForced) {
+                    window.uiManager.createFullPanelForced();
+                }
+            });
+
+            document.body.appendChild(minButton);
+            Logger.info('Emergency minimized button created');
+        }
+
         createConfigDialog() {
             // Enhanced cleanup of existing dialogs using DOMManager
             DebugLogger.log('CONFIG-DIALOG', 'Performing enhanced cleanup before dialog creation');
@@ -2778,68 +2856,50 @@ Example usage:
                     // Still create the button but with additional error handling
                 }
 
-                // FIXED MINIMIZE BUTTON - Proper context binding with tracking
-                const minimizeHandler = (e) => {
+                // FIXED MINIMIZE BUTTON - Proper method binding 
+                const minimizeHandler = function(e) {
                     e.preventDefault();
-                    Logger.info('Minimize button clicked - improved version');
+                    Logger.info('Minimize button clicked - properly bound version');
 
-                    // Use UIManager method with proper context
+                    // Use proper UIManager method chain with comprehensive fallbacks
                     try {
-                        if (this && typeof this.minimizePanel === 'function') {
+                        // Priority 1: Use the UIManager instance that created this panel
+                        if (typeof this.minimizePanel === 'function') {
+                            Logger.info('Using UIManager instance method');
                             this.minimizePanel();
-                        } else if (window.uiManager && typeof window.uiManager.minimizePanel === 'function') {
+                            return;
+                        }
+                        
+                        // Priority 2: Use global UIManager instance
+                        if (window.uiManager && typeof window.uiManager.minimizePanel === 'function') {
+                            Logger.info('Using global UIManager instance');
                             window.uiManager.minimizePanel();
-                        } else {
-                            // Fallback to simple hide/show logic
-                            const panel = document.querySelector('#stash-automation-panel');
-                            if (panel) {
-                                panel.style.display = 'none';
-                                console.log('✅ Panel hidden via fallback');
+                            return;
+                        }
+                        
+                        // Priority 3: Direct fallback with proper button creation
+                        Logger.warn('Using direct fallback approach');
+                        const panel = document.querySelector('#stash-automation-panel');
+                        if (panel) {
+                            panel.style.display = 'none';
+                            // Use global uiManager for button creation if available
+                            if (window.uiManager && typeof window.uiManager.createSimpleMinimizedButton === 'function') {
+                                window.uiManager.createSimpleMinimizedButton();
+                            } else {
+                                // Emergency inline button creation
+                                this.createEmergencyMinimizedButton();
                             }
                         }
                     } catch (error) {
-                        console.error('❌ Minimize button error:', error);
-                        // Emergency fallback
+                        Logger.error('Minimize button error:', error);
+                        // Ultimate emergency fallback
                         const panel = document.querySelector('#stash-automation-panel');
-                        if (panel) panel.style.display = 'none';
-                    }
-
-                    // Create simple minimized button at bottom right
-                    const existingMin = document.querySelector('#stash-minimized-button');
-                    if (existingMin) existingMin.remove();
-
-                    const minButton = document.createElement('button');
-                    minButton.id = 'stash-minimized-button';
-                    minButton.innerHTML = '📱 AutomateStash';
-                    minButton.style.cssText = `
-                        position: fixed;
-                        bottom: 20px;
-                        right: 20px;
-                        z-index: 10000;
-                        background: #667eea;
-                        color: white;
-                        border: none;
-                        padding: 10px 15px;
-                        border-radius: 25px;
-                        cursor: pointer;
-                        font-size: 14px;
-                        font-weight: bold;
-                        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-                    `;
-
-                    // Simple expand on click
-                    minButton.addEventListener('click', function () {
-                        console.log('🔥 EXPAND BUTTON CLICKED - SIMPLE VERSION');
-                        minButton.remove();
                         if (panel) {
-                            panel.style.display = 'block';
-                            console.log('✅ Panel shown');
+                            panel.style.display = 'none';
+                            this.createEmergencyMinimizedButton();
                         }
-                    });
-
-                    document.body.appendChild(minButton);
-                    console.log('✅ Minimized button created');
-                };
+                    }
+                }.bind(this); // Explicitly bind to UIManager instance
 
                 // Use tracked event listener to prevent memory leaks
                 if (this.addEventListenerTracked) {
@@ -6460,8 +6520,23 @@ Example usage:
                     await waitForUserApply();
                     checkCancellation(); // Check after user action
                 } else {
+                    // Enhanced auto-apply with validation
+                    console.log('⚡ Auto-applying ThePornDB changes with validation...');
                     notifications.show('⚡ Auto-applying ThePornDB changes...', 'info');
-                    await applyChanges();
+                    
+                    // Additional brief delay to ensure metadata is fully processed
+                    await sleep(1000);
+                    checkCancellation();
+                    
+                    // Validate that we have some metadata before applying
+                    if (await validateMetadataPresence()) {
+                        await applyChanges();
+                        console.log('✅ ThePornDB auto-apply completed successfully');
+                    } else {
+                        console.log('⚠️ Auto-apply validation failed, switching to manual mode');
+                        notifications.show('⚠️ Please manually review and apply ThePornDB changes', 'warning', 8000);
+                        await waitForUserApply();
+                    }
                     checkCancellation(); // Check after auto-apply
                 }
             } else {
@@ -6701,6 +6776,9 @@ Example usage:
                 notifications.show('ℹ️ No new ThePornDB data found', 'info');
             }
 
+            // CRITICAL FIX: Wait for ThePornDB metadata to be populated in form fields
+            await waitForThePornDBResults();
+            
             return true;
         } catch (error) {
             if (error.message === 'Automation cancelled by user') {
@@ -6710,6 +6788,114 @@ Example usage:
             notifications.show(`❌ ThePornDB error: ${error.message}`, 'error');
             return false;
         }
+    }
+
+    // Wait for ThePornDB metadata to be populated in form fields
+    async function waitForThePornDBResults() {
+        console.log('⏳ Waiting for ThePornDB metadata to populate...');
+        notifications.show('⏳ Waiting for ThePornDB data to load...', 'info');
+        
+        // Configuration for timing - use configured values
+        const delays = getConfig(CONFIG_KEYS.SCRAPER_DELAYS);
+        const maxWaitTime = delays.theporndb_wait || 15000;
+        const checkInterval = delays.metadata_check || 500;
+        const startTime = Date.now();
+        
+        // Fields that ThePornDB typically populates
+        const metadataSelectors = [
+            'input[placeholder*="Title"], input[name*="title"]',
+            'input[placeholder*="Date"], input[name*="date"]', 
+            'textarea[placeholder*="Details"], textarea[name*="details"]',
+            'select[name*="studio"] option:checked:not([value=""])',
+            '.react-select__single-value', // For studio dropdowns
+            '.performer-select .react-select__multi-value' // For performer selections
+        ];
+        
+        let lastMetadataCount = 0;
+        let stableCheckCount = 0;
+        const requiredStableChecks = 3; // Need 3 stable checks to confirm loading is complete
+        
+        while (Date.now() - startTime < maxWaitTime) {
+            checkCancellation();
+            
+            // Count populated metadata fields
+            let currentMetadataCount = 0;
+            for (const selector of metadataSelectors) {
+                const elements = document.querySelectorAll(selector);
+                elements.forEach(el => {
+                    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                        if (el.value && el.value.trim().length > 0) {
+                            currentMetadataCount++;
+                        }
+                    } else if (el.tagName === 'OPTION' && el.selected) {
+                        currentMetadataCount++;
+                    } else if (el.classList.contains('react-select__single-value') || 
+                              el.classList.contains('react-select__multi-value')) {
+                        if (el.textContent && el.textContent.trim().length > 0) {
+                            currentMetadataCount++;
+                        }
+                    }
+                });
+            }
+            
+            console.log(`📊 Metadata fields populated: ${currentMetadataCount}`);
+            
+            // Check if metadata count has stabilized (no changes for several checks)
+            if (currentMetadataCount === lastMetadataCount && currentMetadataCount > 0) {
+                stableCheckCount++;
+                if (stableCheckCount >= requiredStableChecks) {
+                    console.log('✅ ThePornDB metadata appears to be fully loaded');
+                    notifications.show('✅ ThePornDB data loaded successfully', 'success');
+                    return;
+                }
+            } else {
+                stableCheckCount = 0; // Reset if still changing
+            }
+            
+            lastMetadataCount = currentMetadataCount;
+            await sleep(checkInterval);
+        }
+        
+        // Timeout reached
+        if (lastMetadataCount > 0) {
+            console.log('⚠️ ThePornDB metadata timeout, but some data was loaded');
+            notifications.show('⚠️ ThePornDB loading timeout - proceeding with available data', 'warning');
+        } else {
+            console.log('❌ ThePornDB metadata timeout with no data loaded');
+            notifications.show('❌ ThePornDB loading timeout - no data detected', 'error');
+        }
+    }
+
+    // Validate that metadata is present before auto-applying changes
+    async function validateMetadataPresence() {
+        console.log('🔍 Validating metadata presence before auto-apply...');
+        
+        const metadataSelectors = [
+            'input[placeholder*="Title"], input[name*="title"]',
+            'input[placeholder*="Date"], input[name*="date"]', 
+            'textarea[placeholder*="Details"], textarea[name*="details"]',
+            '.react-select__single-value:not(:empty)',
+            '.react-select__multi-value'
+        ];
+        
+        let populatedFields = 0;
+        for (const selector of metadataSelectors) {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(el => {
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                    if (el.value && el.value.trim().length > 0) {
+                        populatedFields++;
+                    }
+                } else if (el.textContent && el.textContent.trim().length > 0) {
+                    populatedFields++;
+                }
+            });
+        }
+        
+        const hasMetadata = populatedFields > 0;
+        console.log(`📊 Validation result: ${populatedFields} metadata fields populated, valid: ${hasMetadata}`);
+        
+        return hasMetadata;
     }
 
     async function applyChanges() {
