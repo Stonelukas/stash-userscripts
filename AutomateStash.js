@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptimizedStash
-// @version      3.3.12-simple-minimize
-// @description  Advanced Stash Scene Automation - SIMPLE minimize button that actually works
+// @version      3.4.0-improved
+// @description  Advanced Stash Scene Automation - Improved with bug fixes and optimizations
 // @author       You
 // @match        http://localhost:9998/scenes/*
 // @exclude      http://localhost:9998/scenes/markers?*
@@ -14,10 +14,40 @@
 (function () {
     'use strict';
 
-    console.log('🚀 AutomateStash v3.3.12-simple-minimize - SIMPLE minimize button that actually works');
-    console.log('🔧 SIMPLE FIX: Replaced complex handler with straightforward hide/show logic');
-    console.log('🔧 NO MORE COMPLEX STUFF: Just hide panel, show small button at bottom');
-    console.log('✅ THIS WILL WORK: Simple JavaScript that does exactly what you need');
+    console.log('🚀 AutomateStash v3.4.0-improved - Enhanced with bug fixes and optimizations');
+    
+    // Debug logging configuration
+    const DEBUG_LEVELS = {
+        ERROR: 0,
+        WARN: 1, 
+        INFO: 2,
+        DEBUG: 3
+    };
+    const CURRENT_DEBUG_LEVEL = DEBUG_LEVELS.INFO; // Reduced from DEBUG to INFO
+
+    // Centralized logging utility to reduce verbosity
+    const Logger = {
+        error: (message, ...args) => {
+            if (CURRENT_DEBUG_LEVEL >= DEBUG_LEVELS.ERROR) {
+                console.error(`❌ ${message}`, ...args);
+            }
+        },
+        warn: (message, ...args) => {
+            if (CURRENT_DEBUG_LEVEL >= DEBUG_LEVELS.WARN) {
+                console.warn(`⚠️ ${message}`, ...args);
+            }
+        },
+        info: (message, ...args) => {
+            if (CURRENT_DEBUG_LEVEL >= DEBUG_LEVELS.INFO) {
+                console.log(`ℹ️ ${message}`, ...args);
+            }
+        },
+        debug: (message, ...args) => {
+            if (CURRENT_DEBUG_LEVEL >= DEBUG_LEVELS.DEBUG) {
+                console.log(`🔍 ${message}`, ...args);
+            }
+        }
+    };
 
     // Configuration Management System
     const CONFIG_KEYS = {
@@ -162,13 +192,24 @@
             }
 
             const clickToCloseText = persistent ? ' (Click to dismiss)' : '';
-            notification.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span>${this.getIcon(type)}</span>
-                    <span>${message}${clickToCloseText}</span>
-                    <span style="margin-left: auto; font-size: 18px;">&times;</span>
-                </div>
-            `;
+            // Safe HTML construction instead of innerHTML
+            const contentDiv = document.createElement('div');
+            contentDiv.style.cssText = 'display: flex; align-items: center; gap: 10px;';
+            
+            const iconSpan = document.createElement('span');
+            iconSpan.textContent = this.getIcon(type);
+            
+            const messageSpan = document.createElement('span');
+            messageSpan.textContent = message + clickToCloseText;
+            
+            const closeSpan = document.createElement('span');
+            closeSpan.style.cssText = 'margin-left: auto; font-size: 18px;';
+            closeSpan.textContent = '×';
+            
+            contentDiv.appendChild(iconSpan);
+            contentDiv.appendChild(messageSpan);
+            contentDiv.appendChild(closeSpan);
+            notification.appendChild(contentDiv);
 
             notification.addEventListener('click', () => {
                 this.remove(notification);
@@ -277,7 +318,7 @@
 
         // Update state with validation and synchronization
         updateState(updates) {
-            console.log('🔄 DEBUG: AutomateStashState.updateState called with:', updates);
+            Logger.debug('AutomateStashState.updateState called with:', updates);
 
             // Validate updates object
             if (!updates || typeof updates !== 'object') {
@@ -291,20 +332,20 @@
             // Sync with window object for backward compatibility
             if ('userManuallyExpanded' in updates) {
                 window.userManuallyExpanded = this.userManuallyExpanded;
-                console.log('🔄 DEBUG: Synced userManuallyExpanded to window:', window.userManuallyExpanded);
+                Logger.debug('Synced userManuallyExpanded to window:', window.userManuallyExpanded);
             }
 
             if ('lastButtonCreationAttempt' in updates) {
                 window.lastButtonCreationAttempt = this.lastButtonCreationAttempt;
-                console.log('🔄 DEBUG: Synced lastButtonCreationAttempt to window:', window.lastButtonCreationAttempt);
+                Logger.debug('Synced lastButtonCreationAttempt to window:', window.lastButtonCreationAttempt);
             }
 
             if ('buttonCreationInProgress' in updates) {
                 window.buttonCreationInProgress = this.buttonCreationInProgress;
-                console.log('🔄 DEBUG: Synced buttonCreationInProgress to window:', window.buttonCreationInProgress);
+                Logger.debug('Synced buttonCreationInProgress to window:', window.buttonCreationInProgress);
             }
 
-            console.log('✅ DEBUG: AutomateStashState updated:', this);
+            Logger.debug('AutomateStashState updated:', this);
         },
 
         // Reset state for new scenes or initialization
@@ -1100,21 +1141,20 @@ Example usage:
         let recoveryCount = 0;
 
         try {
-            // Recovery 1: Reinitialize UIManager if missing or invalid
+            // Recovery 1: Validate UIManager instance (no new instantiation)
             if (typeof uiManager === 'undefined' || !uiManager || typeof uiManager.createFullPanelForced !== 'function') {
-                DebugLogger.log('CONTEXT-RECOVERY', 'Attempting UIManager reinitialization');
+                DebugLogger.log('CONTEXT-RECOVERY', 'UIManager validation failed - using global instance');
                 try {
-                    // Try to recreate UIManager instance
-                    if (typeof UIManager === 'function') {
-                        window.uiManager = new UIManager();
+                    // Use existing global instance instead of creating new one
+                    if (window.uiManager instanceof UIManager) {
                         uiManager = window.uiManager;
-                        DebugLogger.success('CONTEXT-RECOVERY', 'UIManager reinitialized successfully');
+                        DebugLogger.success('CONTEXT-RECOVERY', 'UIManager reference restored from global');
                         recoveryCount++;
                     } else {
-                        DebugLogger.error('CONTEXT-RECOVERY', 'UIManager class not available for reinitialization');
+                        DebugLogger.error('CONTEXT-RECOVERY', 'Global UIManager instance not available');
                     }
                 } catch (error) {
-                    DebugLogger.error('CONTEXT-RECOVERY', 'UIManager reinitialization failed', error);
+                    DebugLogger.error('CONTEXT-RECOVERY', 'UIManager reference recovery failed', error);
                 }
             }
 
@@ -1882,7 +1922,7 @@ Example usage:
             text-align: center;
         `;
 
-        cancelButton.innerHTML = '🛑 CANCEL';
+        cancelButton.textContent = '🛑 CANCEL';
 
         cancelButton.addEventListener('mouseenter', () => {
             cancelButton.style.transform = 'scale(1.05)';
@@ -1925,6 +1965,9 @@ Example usage:
                 this.isMinimized = state.isMinimized;
                 this.panel = null;
                 this.minimizedButton = null;
+                
+                // Event listener tracking for cleanup
+                this.eventListeners = [];
 
                 // Bind methods to ensure proper context
                 this.minimizePanel = this.minimizePanel.bind(this);
@@ -1932,6 +1975,7 @@ Example usage:
                 this.createFullPanelForced = this.createFullPanelForced.bind(this);
                 this.createConfigDialog = this.createConfigDialog.bind(this);
                 this.showConfigDialog = this.showConfigDialog.bind(this);
+                this.cleanup = this.cleanup.bind(this);
 
                 // Instance validation
                 if (!this.validateInstance()) {
@@ -1974,6 +2018,53 @@ Example usage:
                 console.error('❌ UIManager validation error:', error);
                 return false;
             }
+        }
+
+        // Security: Safe HTML sanitization helper
+        sanitizeHTML(html) {
+            // Basic sanitization - remove script tags and event handlers
+            return html
+                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                .replace(/on\w+\s*=\s*"[^"]*"/gi, '')
+                .replace(/on\w+\s*=\s*'[^']*'/gi, '')
+                .replace(/javascript:/gi, '');
+        }
+
+        // Safe innerHTML assignment
+        setInnerHTML(element, html) {
+            if (!element || typeof html !== 'string') return;
+            element.innerHTML = this.sanitizeHTML(html);
+        }
+
+        // Event listener management methods for memory leak prevention
+        addEventListenerTracked(element, event, handler, options) {
+            element.addEventListener(event, handler, options);
+            this.eventListeners.push({ element, event, handler, options });
+        }
+
+        // Cleanup method to prevent memory leaks
+        cleanup() {
+            console.log(`🧹 Cleaning up ${this.eventListeners.length} event listeners`);
+            
+            // Remove all tracked event listeners
+            this.eventListeners.forEach(({ element, event, handler }) => {
+                if (element && element.removeEventListener) {
+                    element.removeEventListener(event, handler);
+                }
+            });
+            this.eventListeners = [];
+
+            // Clean up DOM elements
+            if (this.panel && this.panel.parentNode) {
+                this.panel.remove();
+                this.panel = null;
+            }
+            if (this.minimizedButton && this.minimizedButton.parentNode) {
+                this.minimizedButton.remove();
+                this.minimizedButton = null;
+            }
+
+            console.log('✅ UIManager cleanup completed');
         }
 
         createConfigDialog() {
@@ -2093,7 +2184,12 @@ Example usage:
                 </div>
             `;
 
-            dialog.innerHTML = configHTML;
+            // Use safe HTML assignment for configuration dialog
+            if (this.setInnerHTML) {
+                this.setInnerHTML(dialog, configHTML);
+            } else {
+                dialog.innerHTML = configHTML; // Fallback for compatibility
+            }
 
             // Define close function
             const closeDialog = () => {
@@ -2682,16 +2778,30 @@ Example usage:
                     // Still create the button but with additional error handling
                 }
 
-                // SIMPLE MINIMIZE BUTTON - NO COMPLEX STUFF
-                minimizeBtn.addEventListener('click', function (e) {
+                // FIXED MINIMIZE BUTTON - Proper context binding with tracking
+                const minimizeHandler = (e) => {
                     e.preventDefault();
-                    console.log('� MINIMIaZE BUTTON CLICKED - SIMPLE VERSION');
+                    Logger.info('Minimize button clicked - improved version');
 
-                    // Hide the main panel
-                    const panel = document.querySelector('#stash-automation-panel');
-                    if (panel) {
-                        panel.style.display = 'none';
-                        console.log('✅ Panel hidden');
+                    // Use UIManager method with proper context
+                    try {
+                        if (this && typeof this.minimizePanel === 'function') {
+                            this.minimizePanel();
+                        } else if (window.uiManager && typeof window.uiManager.minimizePanel === 'function') {
+                            window.uiManager.minimizePanel();
+                        } else {
+                            // Fallback to simple hide/show logic
+                            const panel = document.querySelector('#stash-automation-panel');
+                            if (panel) {
+                                panel.style.display = 'none';
+                                console.log('✅ Panel hidden via fallback');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('❌ Minimize button error:', error);
+                        // Emergency fallback
+                        const panel = document.querySelector('#stash-automation-panel');
+                        if (panel) panel.style.display = 'none';
                     }
 
                     // Create simple minimized button at bottom right
@@ -2729,7 +2839,14 @@ Example usage:
 
                     document.body.appendChild(minButton);
                     console.log('✅ Minimized button created');
-                });
+                };
+
+                // Use tracked event listener to prevent memory leaks
+                if (this.addEventListenerTracked) {
+                    this.addEventListenerTracked(minimizeBtn, 'click', minimizeHandler);
+                } else {
+                    minimizeBtn.addEventListener('click', minimizeHandler);
+                }
 
                 header.appendChild(title);
                 header.appendChild(minimizeBtn);
@@ -4823,10 +4940,17 @@ Example usage:
         }
     };
 
-    const uiManager = new UIManager();
-
-    // Make UIManager globally accessible for fallback functions
-    window.uiManager = uiManager;
+    // Singleton UIManager to prevent duplicate instantiation issues
+    const uiManager = (() => {
+        if (window.uiManager instanceof UIManager) {
+            console.log('🔄 Using existing UIManager instance');
+            return window.uiManager;
+        }
+        console.log('🆕 Creating new UIManager instance');
+        const instance = new UIManager();
+        window.uiManager = instance;
+        return instance;
+    })();
 
     // Optimized element waiting with React lifecycle awareness
     async function waitForElement(selector, timeout = 10000, reactAware = true) {
@@ -7082,4 +7206,30 @@ Example usage:
         childList: true,
         subtree: true
     });
+
+    // Add cleanup on page unload to prevent memory leaks
+    window.addEventListener('beforeunload', () => {
+        console.log('🧹 Page unloading - performing cleanup');
+        if (window.uiManager && typeof window.uiManager.cleanup === 'function') {
+            window.uiManager.cleanup();
+        }
+        if (observer) {
+            observer.disconnect();
+        }
+    });
+
+    // Add cleanup on visibility change (tab switching)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            console.log('🧹 Tab hidden - performing maintenance cleanup');
+            if (window.uiManager && typeof window.uiManager.cleanup === 'function') {
+                // Only clean up if automation is not in progress
+                const state = AutomateStashState.getState();
+                if (!state.automationInProgress) {
+                    window.uiManager.cleanup();
+                }
+            }
+        }
+    });
+
 })();
