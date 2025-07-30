@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptimizedStash
-// @version      3.3.12-simple-minimize
-// @description  Advanced Stash Scene Automation - SIMPLE minimize button that actually works
+// @version      3.4.1-critical-fixes
+// @description  Advanced Stash Scene Automation - Critical fixes for minimize button and ThePornDB timing
 // @author       You
 // @match        http://localhost:9998/scenes/*
 // @exclude      http://localhost:9998/scenes/markers?*
@@ -14,10 +14,40 @@
 (function () {
     'use strict';
 
-    console.log('🚀 AutomateStash v3.3.12-simple-minimize - SIMPLE minimize button that actually works');
-    console.log('🔧 SIMPLE FIX: Replaced complex handler with straightforward hide/show logic');
-    console.log('🔧 NO MORE COMPLEX STUFF: Just hide panel, show small button at bottom');
-    console.log('✅ THIS WILL WORK: Simple JavaScript that does exactly what you need');
+    console.log('🚀 AutomateStash v3.4.0-improved - Enhanced with bug fixes and optimizations');
+    
+    // Debug logging configuration
+    const DEBUG_LEVELS = {
+        ERROR: 0,
+        WARN: 1, 
+        INFO: 2,
+        DEBUG: 3
+    };
+    const CURRENT_DEBUG_LEVEL = DEBUG_LEVELS.INFO; // Reduced from DEBUG to INFO
+
+    // Centralized logging utility to reduce verbosity
+    const Logger = {
+        error: (message, ...args) => {
+            if (CURRENT_DEBUG_LEVEL >= DEBUG_LEVELS.ERROR) {
+                console.error(`❌ ${message}`, ...args);
+            }
+        },
+        warn: (message, ...args) => {
+            if (CURRENT_DEBUG_LEVEL >= DEBUG_LEVELS.WARN) {
+                console.warn(`⚠️ ${message}`, ...args);
+            }
+        },
+        info: (message, ...args) => {
+            if (CURRENT_DEBUG_LEVEL >= DEBUG_LEVELS.INFO) {
+                console.log(`ℹ️ ${message}`, ...args);
+            }
+        },
+        debug: (message, ...args) => {
+            if (CURRENT_DEBUG_LEVEL >= DEBUG_LEVELS.DEBUG) {
+                console.log(`🔍 ${message}`, ...args);
+            }
+        }
+    };
 
     // Configuration Management System
     const CONFIG_KEYS = {
@@ -44,7 +74,9 @@
             reaction: 200,
             graphql: 500,
             ui: 300,
-            scraper: 1000
+            scraper: 1000,
+            theporndb_wait: 15000, // Max wait time for ThePornDB metadata population
+            metadata_check: 500    // Interval for checking metadata changes
         }
     };
 
@@ -162,13 +194,24 @@
             }
 
             const clickToCloseText = persistent ? ' (Click to dismiss)' : '';
-            notification.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span>${this.getIcon(type)}</span>
-                    <span>${message}${clickToCloseText}</span>
-                    <span style="margin-left: auto; font-size: 18px;">&times;</span>
-                </div>
-            `;
+            // Safe HTML construction instead of innerHTML
+            const contentDiv = document.createElement('div');
+            contentDiv.style.cssText = 'display: flex; align-items: center; gap: 10px;';
+            
+            const iconSpan = document.createElement('span');
+            iconSpan.textContent = this.getIcon(type);
+            
+            const messageSpan = document.createElement('span');
+            messageSpan.textContent = message + clickToCloseText;
+            
+            const closeSpan = document.createElement('span');
+            closeSpan.style.cssText = 'margin-left: auto; font-size: 18px;';
+            closeSpan.textContent = '×';
+            
+            contentDiv.appendChild(iconSpan);
+            contentDiv.appendChild(messageSpan);
+            contentDiv.appendChild(closeSpan);
+            notification.appendChild(contentDiv);
 
             notification.addEventListener('click', () => {
                 this.remove(notification);
@@ -277,7 +320,7 @@
 
         // Update state with validation and synchronization
         updateState(updates) {
-            console.log('🔄 DEBUG: AutomateStashState.updateState called with:', updates);
+            Logger.debug('AutomateStashState.updateState called with:', updates);
 
             // Validate updates object
             if (!updates || typeof updates !== 'object') {
@@ -291,20 +334,20 @@
             // Sync with window object for backward compatibility
             if ('userManuallyExpanded' in updates) {
                 window.userManuallyExpanded = this.userManuallyExpanded;
-                console.log('🔄 DEBUG: Synced userManuallyExpanded to window:', window.userManuallyExpanded);
+                Logger.debug('Synced userManuallyExpanded to window:', window.userManuallyExpanded);
             }
 
             if ('lastButtonCreationAttempt' in updates) {
                 window.lastButtonCreationAttempt = this.lastButtonCreationAttempt;
-                console.log('🔄 DEBUG: Synced lastButtonCreationAttempt to window:', window.lastButtonCreationAttempt);
+                Logger.debug('Synced lastButtonCreationAttempt to window:', window.lastButtonCreationAttempt);
             }
 
             if ('buttonCreationInProgress' in updates) {
                 window.buttonCreationInProgress = this.buttonCreationInProgress;
-                console.log('🔄 DEBUG: Synced buttonCreationInProgress to window:', window.buttonCreationInProgress);
+                Logger.debug('Synced buttonCreationInProgress to window:', window.buttonCreationInProgress);
             }
 
-            console.log('✅ DEBUG: AutomateStashState updated:', this);
+            Logger.debug('AutomateStashState updated:', this);
         },
 
         // Reset state for new scenes or initialization
@@ -1100,21 +1143,20 @@ Example usage:
         let recoveryCount = 0;
 
         try {
-            // Recovery 1: Reinitialize UIManager if missing or invalid
+            // Recovery 1: Validate UIManager instance (no new instantiation)
             if (typeof uiManager === 'undefined' || !uiManager || typeof uiManager.createFullPanelForced !== 'function') {
-                DebugLogger.log('CONTEXT-RECOVERY', 'Attempting UIManager reinitialization');
+                DebugLogger.log('CONTEXT-RECOVERY', 'UIManager validation failed - using global instance');
                 try {
-                    // Try to recreate UIManager instance
-                    if (typeof UIManager === 'function') {
-                        window.uiManager = new UIManager();
+                    // Use existing global instance instead of creating new one
+                    if (window.uiManager instanceof UIManager) {
                         uiManager = window.uiManager;
-                        DebugLogger.success('CONTEXT-RECOVERY', 'UIManager reinitialized successfully');
+                        DebugLogger.success('CONTEXT-RECOVERY', 'UIManager reference restored from global');
                         recoveryCount++;
                     } else {
-                        DebugLogger.error('CONTEXT-RECOVERY', 'UIManager class not available for reinitialization');
+                        DebugLogger.error('CONTEXT-RECOVERY', 'Global UIManager instance not available');
                     }
                 } catch (error) {
-                    DebugLogger.error('CONTEXT-RECOVERY', 'UIManager reinitialization failed', error);
+                    DebugLogger.error('CONTEXT-RECOVERY', 'UIManager reference recovery failed', error);
                 }
             }
 
@@ -1882,7 +1924,7 @@ Example usage:
             text-align: center;
         `;
 
-        cancelButton.innerHTML = '🛑 CANCEL';
+        cancelButton.textContent = '🛑 CANCEL';
 
         cancelButton.addEventListener('mouseenter', () => {
             cancelButton.style.transform = 'scale(1.05)';
@@ -1925,6 +1967,9 @@ Example usage:
                 this.isMinimized = state.isMinimized;
                 this.panel = null;
                 this.minimizedButton = null;
+                
+                // Event listener tracking for cleanup
+                this.eventListeners = [];
 
                 // Bind methods to ensure proper context
                 this.minimizePanel = this.minimizePanel.bind(this);
@@ -1932,6 +1977,7 @@ Example usage:
                 this.createFullPanelForced = this.createFullPanelForced.bind(this);
                 this.createConfigDialog = this.createConfigDialog.bind(this);
                 this.showConfigDialog = this.showConfigDialog.bind(this);
+                this.cleanup = this.cleanup.bind(this);
 
                 // Instance validation
                 if (!this.validateInstance()) {
@@ -1974,6 +2020,129 @@ Example usage:
                 console.error('❌ UIManager validation error:', error);
                 return false;
             }
+        }
+
+        // Security: Safe HTML sanitization helper
+        sanitizeHTML(html) {
+            // Basic sanitization - remove script tags and event handlers
+            return html
+                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                .replace(/on\w+\s*=\s*"[^"]*"/gi, '')
+                .replace(/on\w+\s*=\s*'[^']*'/gi, '')
+                .replace(/javascript:/gi, '');
+        }
+
+        // Safe innerHTML assignment
+        setInnerHTML(element, html) {
+            if (!element || typeof html !== 'string') return;
+            element.innerHTML = this.sanitizeHTML(html);
+        }
+
+        // Event listener management methods for memory leak prevention
+        addEventListenerTracked(element, event, handler, options) {
+            element.addEventListener(event, handler, options);
+            this.eventListeners.push({ element, event, handler, options });
+        }
+
+        // Cleanup method to prevent memory leaks
+        cleanup() {
+            console.log(`🧹 Cleaning up ${this.eventListeners.length} event listeners`);
+            
+            // Remove all tracked event listeners
+            this.eventListeners.forEach(({ element, event, handler }) => {
+                if (element && element.removeEventListener) {
+                    element.removeEventListener(event, handler);
+                }
+            });
+            this.eventListeners = [];
+
+            // Clean up DOM elements
+            if (this.panel && this.panel.parentNode) {
+                this.panel.remove();
+                this.panel = null;
+            }
+            if (this.minimizedButton && this.minimizedButton.parentNode) {
+                this.minimizedButton.remove();
+                this.minimizedButton = null;
+            }
+
+            console.log('✅ UIManager cleanup completed');
+        }
+
+        // Simple minimized button creation for fallback scenarios
+        createSimpleMinimizedButton() {
+            // Remove existing minimized button
+            const existingMin = document.querySelector('#stash-minimized-button');
+            if (existingMin) existingMin.remove();
+
+            const minButton = document.createElement('button');
+            minButton.id = 'stash-minimized-button';
+            minButton.textContent = '📱 AutomateStash';
+            minButton.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 10000;
+                background: #667eea;
+                color: white;
+                border: none;
+                padding: 10px 15px;
+                border-radius: 25px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: bold;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+                transition: all 0.2s ease;
+            `;
+
+            // Simple expand on click
+            minButton.addEventListener('click', () => {
+                Logger.info('Expand button clicked');
+                minButton.remove();
+                const panel = document.querySelector('#stash-automation-panel');
+                if (panel) {
+                    panel.style.display = 'block';
+                } else {
+                    // Recreate panel if it doesn't exist
+                    if (window.uiManager && typeof window.uiManager.createFullPanelForced === 'function') {
+                        window.uiManager.createFullPanelForced();
+                    }
+                }
+            });
+
+            document.body.appendChild(minButton);
+            this.minimizedButton = minButton;
+            Logger.info('Simple minimized button created');
+        }
+
+        // Emergency minimized button creation for ultimate fallback
+        createEmergencyMinimizedButton() {
+            const existingMin = document.querySelector('#stash-minimized-button');
+            if (existingMin) existingMin.remove();
+
+            const minButton = document.createElement('button');
+            minButton.id = 'stash-minimized-button';
+            minButton.textContent = '📱 AutomateStash';
+            minButton.style.cssText = `
+                position: fixed; bottom: 20px; right: 20px; z-index: 10000;
+                background: #667eea; color: white; border: none; padding: 10px 15px;
+                border-radius: 25px; cursor: pointer; font-size: 14px; font-weight: bold;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: all 0.2s ease;
+            `;
+
+            minButton.addEventListener('click', () => {
+                Logger.info('Emergency expand button clicked');
+                minButton.remove();
+                const panel = document.querySelector('#stash-automation-panel');
+                if (panel) {
+                    panel.style.display = 'block';
+                } else if (window.uiManager?.createFullPanelForced) {
+                    window.uiManager.createFullPanelForced();
+                }
+            });
+
+            document.body.appendChild(minButton);
+            Logger.info('Emergency minimized button created');
         }
 
         createConfigDialog() {
@@ -2093,7 +2262,12 @@ Example usage:
                 </div>
             `;
 
-            dialog.innerHTML = configHTML;
+            // Use safe HTML assignment for configuration dialog
+            if (this.setInnerHTML) {
+                this.setInnerHTML(dialog, configHTML);
+            } else {
+                dialog.innerHTML = configHTML; // Fallback for compatibility
+            }
 
             // Define close function
             const closeDialog = () => {
@@ -2682,54 +2856,57 @@ Example usage:
                     // Still create the button but with additional error handling
                 }
 
-                // SIMPLE MINIMIZE BUTTON - NO COMPLEX STUFF
-                minimizeBtn.addEventListener('click', function (e) {
+                // FIXED MINIMIZE BUTTON - Proper method binding 
+                const minimizeHandler = function(e) {
                     e.preventDefault();
-                    console.log('� MINIMIaZE BUTTON CLICKED - SIMPLE VERSION');
+                    Logger.info('Minimize button clicked - properly bound version');
 
-                    // Hide the main panel
-                    const panel = document.querySelector('#stash-automation-panel');
-                    if (panel) {
-                        panel.style.display = 'none';
-                        console.log('✅ Panel hidden');
-                    }
-
-                    // Create simple minimized button at bottom right
-                    const existingMin = document.querySelector('#stash-minimized-button');
-                    if (existingMin) existingMin.remove();
-
-                    const minButton = document.createElement('button');
-                    minButton.id = 'stash-minimized-button';
-                    minButton.innerHTML = '📱 AutomateStash';
-                    minButton.style.cssText = `
-                        position: fixed;
-                        bottom: 20px;
-                        right: 20px;
-                        z-index: 10000;
-                        background: #667eea;
-                        color: white;
-                        border: none;
-                        padding: 10px 15px;
-                        border-radius: 25px;
-                        cursor: pointer;
-                        font-size: 14px;
-                        font-weight: bold;
-                        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-                    `;
-
-                    // Simple expand on click
-                    minButton.addEventListener('click', function () {
-                        console.log('🔥 EXPAND BUTTON CLICKED - SIMPLE VERSION');
-                        minButton.remove();
-                        if (panel) {
-                            panel.style.display = 'block';
-                            console.log('✅ Panel shown');
+                    // Use proper UIManager method chain with comprehensive fallbacks
+                    try {
+                        // Priority 1: Use the UIManager instance that created this panel
+                        if (typeof this.minimizePanel === 'function') {
+                            Logger.info('Using UIManager instance method');
+                            this.minimizePanel();
+                            return;
                         }
-                    });
+                        
+                        // Priority 2: Use global UIManager instance
+                        if (window.uiManager && typeof window.uiManager.minimizePanel === 'function') {
+                            Logger.info('Using global UIManager instance');
+                            window.uiManager.minimizePanel();
+                            return;
+                        }
+                        
+                        // Priority 3: Direct fallback with proper button creation
+                        Logger.warn('Using direct fallback approach');
+                        const panel = document.querySelector('#stash-automation-panel');
+                        if (panel) {
+                            panel.style.display = 'none';
+                            // Use global uiManager for button creation if available
+                            if (window.uiManager && typeof window.uiManager.createSimpleMinimizedButton === 'function') {
+                                window.uiManager.createSimpleMinimizedButton();
+                            } else {
+                                // Emergency inline button creation
+                                this.createEmergencyMinimizedButton();
+                            }
+                        }
+                    } catch (error) {
+                        Logger.error('Minimize button error:', error);
+                        // Ultimate emergency fallback
+                        const panel = document.querySelector('#stash-automation-panel');
+                        if (panel) {
+                            panel.style.display = 'none';
+                            this.createEmergencyMinimizedButton();
+                        }
+                    }
+                }.bind(this); // Explicitly bind to UIManager instance
 
-                    document.body.appendChild(minButton);
-                    console.log('✅ Minimized button created');
-                });
+                // Use tracked event listener to prevent memory leaks
+                if (this.addEventListenerTracked) {
+                    this.addEventListenerTracked(minimizeBtn, 'click', minimizeHandler);
+                } else {
+                    minimizeBtn.addEventListener('click', minimizeHandler);
+                }
 
                 header.appendChild(title);
                 header.appendChild(minimizeBtn);
@@ -4823,10 +5000,17 @@ Example usage:
         }
     };
 
-    const uiManager = new UIManager();
-
-    // Make UIManager globally accessible for fallback functions
-    window.uiManager = uiManager;
+    // Singleton UIManager to prevent duplicate instantiation issues
+    const uiManager = (() => {
+        if (window.uiManager instanceof UIManager) {
+            console.log('🔄 Using existing UIManager instance');
+            return window.uiManager;
+        }
+        console.log('🆕 Creating new UIManager instance');
+        const instance = new UIManager();
+        window.uiManager = instance;
+        return instance;
+    })();
 
     // Optimized element waiting with React lifecycle awareness
     async function waitForElement(selector, timeout = 10000, reactAware = true) {
@@ -6336,8 +6520,23 @@ Example usage:
                     await waitForUserApply();
                     checkCancellation(); // Check after user action
                 } else {
+                    // Enhanced auto-apply with validation
+                    console.log('⚡ Auto-applying ThePornDB changes with validation...');
                     notifications.show('⚡ Auto-applying ThePornDB changes...', 'info');
-                    await applyChanges();
+                    
+                    // Additional brief delay to ensure metadata is fully processed
+                    await sleep(1000);
+                    checkCancellation();
+                    
+                    // Validate that we have some metadata before applying
+                    if (await validateMetadataPresence()) {
+                        await applyChanges();
+                        console.log('✅ ThePornDB auto-apply completed successfully');
+                    } else {
+                        console.log('⚠️ Auto-apply validation failed, switching to manual mode');
+                        notifications.show('⚠️ Please manually review and apply ThePornDB changes', 'warning', 8000);
+                        await waitForUserApply();
+                    }
                     checkCancellation(); // Check after auto-apply
                 }
             } else {
@@ -6577,6 +6776,9 @@ Example usage:
                 notifications.show('ℹ️ No new ThePornDB data found', 'info');
             }
 
+            // CRITICAL FIX: Wait for ThePornDB metadata to be populated in form fields
+            await waitForThePornDBResults();
+            
             return true;
         } catch (error) {
             if (error.message === 'Automation cancelled by user') {
@@ -6586,6 +6788,114 @@ Example usage:
             notifications.show(`❌ ThePornDB error: ${error.message}`, 'error');
             return false;
         }
+    }
+
+    // Wait for ThePornDB metadata to be populated in form fields
+    async function waitForThePornDBResults() {
+        console.log('⏳ Waiting for ThePornDB metadata to populate...');
+        notifications.show('⏳ Waiting for ThePornDB data to load...', 'info');
+        
+        // Configuration for timing - use configured values
+        const delays = getConfig(CONFIG_KEYS.SCRAPER_DELAYS);
+        const maxWaitTime = delays.theporndb_wait || 15000;
+        const checkInterval = delays.metadata_check || 500;
+        const startTime = Date.now();
+        
+        // Fields that ThePornDB typically populates
+        const metadataSelectors = [
+            'input[placeholder*="Title"], input[name*="title"]',
+            'input[placeholder*="Date"], input[name*="date"]', 
+            'textarea[placeholder*="Details"], textarea[name*="details"]',
+            'select[name*="studio"] option:checked:not([value=""])',
+            '.react-select__single-value', // For studio dropdowns
+            '.performer-select .react-select__multi-value' // For performer selections
+        ];
+        
+        let lastMetadataCount = 0;
+        let stableCheckCount = 0;
+        const requiredStableChecks = 3; // Need 3 stable checks to confirm loading is complete
+        
+        while (Date.now() - startTime < maxWaitTime) {
+            checkCancellation();
+            
+            // Count populated metadata fields
+            let currentMetadataCount = 0;
+            for (const selector of metadataSelectors) {
+                const elements = document.querySelectorAll(selector);
+                elements.forEach(el => {
+                    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                        if (el.value && el.value.trim().length > 0) {
+                            currentMetadataCount++;
+                        }
+                    } else if (el.tagName === 'OPTION' && el.selected) {
+                        currentMetadataCount++;
+                    } else if (el.classList.contains('react-select__single-value') || 
+                              el.classList.contains('react-select__multi-value')) {
+                        if (el.textContent && el.textContent.trim().length > 0) {
+                            currentMetadataCount++;
+                        }
+                    }
+                });
+            }
+            
+            console.log(`📊 Metadata fields populated: ${currentMetadataCount}`);
+            
+            // Check if metadata count has stabilized (no changes for several checks)
+            if (currentMetadataCount === lastMetadataCount && currentMetadataCount > 0) {
+                stableCheckCount++;
+                if (stableCheckCount >= requiredStableChecks) {
+                    console.log('✅ ThePornDB metadata appears to be fully loaded');
+                    notifications.show('✅ ThePornDB data loaded successfully', 'success');
+                    return;
+                }
+            } else {
+                stableCheckCount = 0; // Reset if still changing
+            }
+            
+            lastMetadataCount = currentMetadataCount;
+            await sleep(checkInterval);
+        }
+        
+        // Timeout reached
+        if (lastMetadataCount > 0) {
+            console.log('⚠️ ThePornDB metadata timeout, but some data was loaded');
+            notifications.show('⚠️ ThePornDB loading timeout - proceeding with available data', 'warning');
+        } else {
+            console.log('❌ ThePornDB metadata timeout with no data loaded');
+            notifications.show('❌ ThePornDB loading timeout - no data detected', 'error');
+        }
+    }
+
+    // Validate that metadata is present before auto-applying changes
+    async function validateMetadataPresence() {
+        console.log('🔍 Validating metadata presence before auto-apply...');
+        
+        const metadataSelectors = [
+            'input[placeholder*="Title"], input[name*="title"]',
+            'input[placeholder*="Date"], input[name*="date"]', 
+            'textarea[placeholder*="Details"], textarea[name*="details"]',
+            '.react-select__single-value:not(:empty)',
+            '.react-select__multi-value'
+        ];
+        
+        let populatedFields = 0;
+        for (const selector of metadataSelectors) {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(el => {
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                    if (el.value && el.value.trim().length > 0) {
+                        populatedFields++;
+                    }
+                } else if (el.textContent && el.textContent.trim().length > 0) {
+                    populatedFields++;
+                }
+            });
+        }
+        
+        const hasMetadata = populatedFields > 0;
+        console.log(`📊 Validation result: ${populatedFields} metadata fields populated, valid: ${hasMetadata}`);
+        
+        return hasMetadata;
     }
 
     async function applyChanges() {
@@ -7082,4 +7392,30 @@ Example usage:
         childList: true,
         subtree: true
     });
+
+    // Add cleanup on page unload to prevent memory leaks
+    window.addEventListener('beforeunload', () => {
+        console.log('🧹 Page unloading - performing cleanup');
+        if (window.uiManager && typeof window.uiManager.cleanup === 'function') {
+            window.uiManager.cleanup();
+        }
+        if (observer) {
+            observer.disconnect();
+        }
+    });
+
+    // Add cleanup on visibility change (tab switching)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            console.log('🧹 Tab hidden - performing maintenance cleanup');
+            if (window.uiManager && typeof window.uiManager.cleanup === 'function') {
+                // Only clean up if automation is not in progress
+                const state = AutomateStashState.getState();
+                if (!state.automationInProgress) {
+                    window.uiManager.cleanup();
+                }
+            }
+        }
+    });
+
 })();
