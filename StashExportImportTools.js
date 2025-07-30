@@ -15,6 +15,14 @@
 
 (function() {
     'use strict';
+    
+    // Immediately create a stub to prevent errors from external buttons
+    window.exportImportTools = {
+        startExport: () => {
+            console.error('[Export/Import Tools] Export button clicked but tools not fully initialized yet. Please use the 📦 Export/Import toggle button.');
+            alert('Export/Import Tools: Please use the 📦 Export/Import toggle button to access export functionality.');
+        }
+    };
 
     // ============= Configuration =============
     const CONFIG = {
@@ -25,7 +33,7 @@
         EXPORT_FORMATS: ['json', 'csv', 'xml'],
         IMPORT_FORMATS: ['json', 'csv', 'plex', 'jellyfin', 'kodi'],
         BACKUP_COMPRESSION: ['none', 'gzip', 'zip'],
-        DEBUG_MODE: false
+        DEBUG_MODE: true
     };
 
     // ============= Utilities =============
@@ -1535,6 +1543,15 @@
         }
 
         async startExport() {
+            console.log('[Export/Import Tools] startExport called');
+            console.log('[Export/Import Tools] Widget visibility:', this.widget.style.display);
+            
+            // Make sure widget is visible
+            if (this.widget.style.display === 'none') {
+                console.log('[Export/Import Tools] Widget was hidden, showing it now');
+                this.widget.style.display = 'block';
+            }
+            
             try {
                 const format = document.getElementById('export-format').value;
                 const dataTypes = Array.from(
@@ -2182,6 +2199,14 @@
         
         // Make UI accessible globally for event handlers
         window.exportImportUI = ui;
+        
+        // Also make exportImportTools available for backward compatibility
+        window.exportImportTools = {
+            startExport: () => ui.startExport(),
+            startImport: () => ui.startImport(),
+            startBackup: () => ui.startBackup(),
+            toggleWidget: () => ui.toggleWidget()
+        };
 
         log('Export/Import Tools initialized successfully!');
         
@@ -2198,5 +2223,17 @@
     } else {
         initialize();
     }
+    
+    // Debug: Check for any buttons calling exportImportTools after a delay
+    setTimeout(() => {
+        const allButtons = document.querySelectorAll('button');
+        allButtons.forEach(btn => {
+            if (btn.onclick && btn.onclick.toString().includes('exportImportTools')) {
+                console.warn('[Export/Import Tools] Found external button calling exportImportTools:', btn);
+                console.warn('Button HTML:', btn.outerHTML);
+                console.warn('Button location:', btn.getBoundingClientRect());
+            }
+        });
+    }, 2000);
 
 })();
