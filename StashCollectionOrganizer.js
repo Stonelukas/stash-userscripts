@@ -172,7 +172,7 @@
                             paths {
                                 screenshot
                             }
-                            file {
+                            files {
                                 path
                                 size
                                 duration
@@ -279,9 +279,9 @@
             const folderPatterns = new Map();
             
             scenes.forEach(scene => {
-                if (!scene.file?.path) return;
+                if (!scene.files?.[0]?.path) return;
                 
-                const pathParts = scene.file.path.split(/[/\\]/);
+                const pathParts = scene.files[0].path.split(/[/\\]/);
                 pathParts.pop(); // Remove filename
                 
                 // Analyze folder depth
@@ -369,9 +369,9 @@
             const namingPatterns = new Map();
             
             scenes.forEach(scene => {
-                if (!scene.file?.path) return;
+                if (!scene.files?.[0]?.path) return;
                 
-                const filename = scene.file.path.split(/[/\\]/).pop();
+                const filename = scene.files[0].path.split(/[/\\]/).pop();
                 const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.') || filename.length);
                 
                 const pattern = this.detectNamingPattern(nameWithoutExt, scene);
@@ -608,7 +608,7 @@
                     if (!performerScenes.has(performer.id)) {
                         performerScenes.set(performer.id, new Set());
                     }
-                    const folder = scene.file?.path?.split(/[/\\]/).slice(0, -1).join('/');
+                    const folder = scene.files?.[0]?.path?.split(/[/\\]/).slice(0, -1).join('/');
                     if (folder) {
                         performerScenes.get(performer.id).add(folder);
                     }
@@ -628,8 +628,8 @@
             
             // Check for deep nesting
             scenes.forEach(scene => {
-                if (scene.file?.path) {
-                    const depth = scene.file.path.split(/[/\\]/).length - 1;
+                if (scene.files?.[0]?.path) {
+                    const depth = scene.files[0].path.split(/[/\\]/).length - 1;
                     if (depth > CONFIG.MAX_FOLDER_DEPTH) {
                         issues.push({
                             type: 'deep_nesting',
@@ -660,7 +660,7 @@
                 structure.get(path).scenes.push({
                     id: scene.id,
                     title: scene.title,
-                    currentPath: scene.file?.path
+                    currentPath: scene.files?.[0]?.path
                 });
             });
             
@@ -777,9 +777,9 @@
             const suggestedNames = new Map();
             
             scenes.forEach(scene => {
-                if (!scene.file?.path) return;
+                if (!scene.files?.[0]?.path) return;
                 
-                const currentFilename = scene.file.path.split(/[/\\]/).pop();
+                const currentFilename = scene.files[0].path.split(/[/\\]/).pop();
                 const suggestedFilename = this.generateStandardName(
                     scene,
                     organizationPreferences.namingStyle
@@ -806,8 +806,8 @@
         }
 
         generateStandardName(scene, template) {
-            const extension = scene.file?.path ? 
-                scene.file.path.split('.').pop() : 'mp4';
+            const extension = scene.files?.[0]?.path ? 
+                scene.files[0].path.split('.').pop() : 'mp4';
             
             const tokens = {
                 performer: scene.performers?.map(p => p.name).join(', ') || 'Unknown',
@@ -966,8 +966,8 @@
                 switch (field) {
                     case 'title':
                         // Try to extract title from filename
-                        if (scene.file?.path) {
-                            const filename = scene.file.path.split(/[/\\]/).pop();
+                        if (scene.files?.[0]?.path) {
+                            const filename = scene.files[0].path.split(/[/\\]/).pop();
                             const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.') || filename.length);
                             suggestions.title = this.cleanupTitle(nameWithoutExt);
                         }
@@ -975,8 +975,8 @@
                         
                     case 'date':
                         // Try to extract date from filename or path
-                        if (scene.file?.path) {
-                            const dateMatch = scene.file.path.match(/(\d{4})[-_]?(\d{2})[-_]?(\d{2})/);
+                        if (scene.files?.[0]?.path) {
+                            const dateMatch = scene.files[0].path.match(/(\d{4})[-_]?(\d{2})[-_]?(\d{2})/);
                             if (dateMatch) {
                                 suggestions.date = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
                             }
@@ -985,8 +985,8 @@
                         
                     case 'performers':
                         // Suggest based on folder structure
-                        if (scene.file?.path) {
-                            const pathParts = scene.file.path.split(/[/\\]/);
+                        if (scene.files?.[0]?.path) {
+                            const pathParts = scene.files[0].path.split(/[/\\]/);
                             suggestions.performerHints = pathParts.filter(part => 
                                 part.length > 2 && !part.match(/^\d+$/)
                             );
@@ -1090,9 +1090,9 @@
             const structure = new Map();
 
             scenes.forEach(scene => {
-                if (!scene.file?.path) return;
+                if (!scene.files?.[0]?.path) return;
 
-                const pathParts = scene.file.path.split(/[/\\]/);
+                const pathParts = scene.files[0].path.split(/[/\\]/);
                 const filename = pathParts.pop();
                 const folderPath = pathParts.join('/') || '/';
 
@@ -1106,7 +1106,7 @@
                 structure.get(folderPath).files.push({
                     sceneId: scene.id,
                     filename: filename,
-                    size: scene.file.size,
+                    size: scene.files[0].size,
                     metadata: {
                         title: scene.title,
                         performers: scene.performers?.map(p => p.name),
@@ -1264,9 +1264,9 @@
         backupMetadata(scenes) {
             return scenes.map(scene => ({
                 id: scene.id,
-                file: scene.file ? {
-                    path: scene.file.path,
-                    size: scene.file.size
+                file: scene.files?.[0] ? {
+                    path: scene.files[0].path,
+                    size: scene.files[0].size
                 } : null,
                 metadata: {
                     title: scene.title,
@@ -1539,7 +1539,7 @@
             filename = this.cleanupFilename(filename);
             
             // Add extension
-            const extension = this.getFileExtension(scene.file?.path);
+            const extension = this.getFileExtension(scene.files?.[0]?.path);
             
             return Utils.sanitizeFilename(filename) + extension;
         }
@@ -1675,9 +1675,9 @@
             const inconsistencies = [];
             
             scenes.forEach(scene => {
-                if (!scene.file?.path) return;
+                if (!scene.files?.[0]?.path) return;
                 
-                const filename = scene.file.path.split(/[/\\]/).pop();
+                const filename = scene.files[0].path.split(/[/\\]/).pop();
                 const pattern = this.detectPattern(filename, scene);
                 
                 if (!patterns.has(pattern.key)) {
@@ -1712,9 +1712,9 @@
             
             // Identify files that don't match the most common pattern
             scenes.forEach(scene => {
-                if (!scene.file?.path) return;
+                if (!scene.files?.[0]?.path) return;
                 
-                const filename = scene.file.path.split(/[/\\]/).pop();
+                const filename = scene.files[0].path.split(/[/\\]/).pop();
                 const pattern = this.detectPattern(filename, scene);
                 
                 if (mostCommon && pattern.key !== mostCommon.pattern.key) {
@@ -1919,9 +1919,9 @@
             const conflicts = new Map();
             
             scenes.forEach(scene => {
-                if (!scene.file?.path) return;
+                if (!scene.files?.[0]?.path) return;
                 
-                const currentPath = scene.file.path;
+                const currentPath = scene.files[0].path;
                 const currentFilename = currentPath.split(/[/\\]/).pop();
                 const folder = currentPath.substring(0, currentPath.lastIndexOf(currentFilename));
                 
@@ -2179,8 +2179,8 @@
             const sources = [];
             
             // Check filename for metadata
-            if (scene.file?.path) {
-                const filename = scene.file.path.split(/[/\\]/).pop();
+            if (scene.files?.[0]?.path) {
+                const filename = scene.files[0].path.split(/[/\\]/).pop();
                 const filenameData = this.extractMetadataFromFilename(filename);
                 
                 if (filenameData.performers && completeness.missing.includes('performers')) {
