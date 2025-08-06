@@ -1,0 +1,9 @@
+name: AutomateStash
+description: Automated metadata scraping and scene organization for Stash
+version: 4.5.0
+url: https://github.com/stashapp/CommunityScripts
+ui:
+  javascript:
+    - automate-stash-enhanced.js
+  css:
+    - automate-stash.css

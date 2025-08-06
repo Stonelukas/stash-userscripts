@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Stash Suite Settings</title>
+    <link rel="stylesheet" href="options.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚙️ Stash Suite Settings</h1>
+            <p class="version">Version <span id="version"></span></p>
+        </header>
+
+        <section class="settings-section">
+            <h2>🛠️ Enabled Tools</h2>
+            <div class="settings-grid">
+                <label class="setting-item">
+                    <input type="checkbox" id="enableAutomateStash">
+                    <div>
+                        <strong>AutomateStash</strong>
+                        <p>Automated metadata scraping and scene organization</p>
+                    </div>
+                </label>
+                
+                <label class="setting-item">
+                    <input type="checkbox" id="enableBulkOperations">
+                    <div>
+                        <strong>Bulk Operations</strong>
+                        <p>Batch editing for multiple scenes</p>
+                    </div>
+                </label>
+                
+                <label class="setting-item">
+                    <input type="checkbox" id="enableQualityAnalyzer">
+                    <div>
+                        <strong>Quality Analyzer</strong>
+                        <p>Video quality assessment and duplicate detection</p>
+                    </div>
+                </label>
+                
+                <label class="setting-item">
+                    <input type="checkbox" id="enablePerformanceMonitor">
+                    <div>
+                        <strong>Performance Monitor</strong>
+                        <p>Real-time performance metrics and optimization</p>
+                    </div>
+                </label>
+                
+                <label class="setting-item">
+                    <input type="checkbox" id="enablePerformerManager">
+                    <div>
+                        <strong>Performer Manager</strong>
+                        <p>Enhanced performer search and relationships</p>
+                    </div>
+                </label>
+                
+                <label class="setting-item">
+                    <input type="checkbox" id="enableCollectionOrganizer">
+                    <div>
+                        <strong>Collection Organizer</strong>
+                        <p>Smart organization and metadata analysis</p>
+                    </div>
+                </label>
+                
+                <label class="setting-item">
+                    <input type="checkbox" id="enableExportImportTools">
+                    <div>
+                        <strong>Export/Import Tools</strong>
+                        <p>Data portability and backup solutions</p>
+                    </div>
+                </label>
+            </div>
+        </section>
+
+        <section class="settings-section">
+            <h2>🚀 AutomateStash Settings</h2>
+            <div class="settings-grid">
+                <label class="setting-item">
+                    <input type="checkbox" id="autoScrapeStashDB">
+                    <div>
+                        <strong>Auto-scrape StashDB</strong>
+                        <p>Automatically scrape metadata from StashDB</p>
+                    </div>
+                </label>
+                
+                <label class="setting-item">
+                    <input type="checkbox" id="autoScrapeThePornDB">
+                    <div>
+                        <strong>Auto-scrape ThePornDB</strong>
+                        <p>Automatically scrape metadata from ThePornDB</p>
+                    </div>
+                </label>
+                
+                <label class="setting-item">
+                    <input type="checkbox" id="autoOrganize">
+                    <div>
+                        <strong>Auto-organize Scenes</strong>
+                        <p>Automatically mark scenes as organized</p>
+                    </div>
+                </label>
+                
+                <label class="setting-item">
+                    <input type="checkbox" id="autoCreatePerformers">
+                    <div>
+                        <strong>Auto-create Performers</strong>
+                        <p>Create new performers from scraped data</p>
+                    </div>
+                </label>
+                
+                <label class="setting-item">
+                    <input type="checkbox" id="minimizeWhenComplete">
+                    <div>
+                        <strong>Minimize When Complete</strong>
+                        <p>Minimize the UI after automation completes</p>
+                    </div>
+                </label>
+                
+                <label class="setting-item">
+                    <input type="checkbox" id="autoApplyChanges">
+                    <div>
+                        <strong>Auto-apply Changes</strong>
+                        <p>Apply changes without confirmation</p>
+                    </div>
+                </label>
+                
+                <label class="setting-item">
+                    <input type="checkbox" id="skipAlreadyScraped">
+                    <div>
+                        <strong>Skip Already Scraped</strong>
+                        <p>Skip scenes that have been scraped before</p>
+                    </div>
+                </label>
+            </div>
+        </section>
+
+        <section class="settings-section">
+            <h2>🔔 General Settings</h2>
+            <div class="settings-grid">
+                <label class="setting-item">
+                    <input type="checkbox" id="showNotifications">
+                    <div>
+                        <strong>Show Notifications</strong>
+                        <p>Display browser notifications for operations</p>
+                    </div>
+                </label>
+                
+                <label class="setting-item">
+                    <input type="checkbox" id="autoRefresh">
+                    <div>
+                        <strong>Auto Refresh</strong>
+                        <p>Automatically refresh after operations</p>
+                    </div>
+                </label>
+            </div>
+        </section>
+
+        <section class="settings-section">
+            <h2>🔗 Stash Connection</h2>
+            <div class="settings-grid full-width">
+                <div class="setting-item">
+                    <label for="stashAddress">
+                        <strong>Stash Address</strong>
+                        <p>URL of your Stash instance</p>
+                    </label>
+                    <input type="text" id="stashAddress" placeholder="http://localhost:9998">
+                </div>
+                
+                <div class="setting-item">
+                    <label for="stashApiKey">
+                        <strong>API Key (Optional)</strong>
+                        <p>Required if authentication is enabled</p>
+                    </label>
+                    <input type="password" id="stashApiKey" placeholder="Enter API key if required">
+                </div>
+            </div>
+        </section>
+
+        <div class="button-group">
+            <button id="save" class="primary">Save Settings</button>
+            <button id="reset">Reset to Defaults</button>
+            <button id="export">Export Settings</button>
+            <button id="import">Import Settings</button>
+        </div>
+
+        <div id="status" class="status"></div>
+    </div>
+
+    <script src="options.js"></script>
+</body>
+</html>

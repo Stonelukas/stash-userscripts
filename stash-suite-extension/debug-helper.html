@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Stash Suite Extension Debug Helper</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .section {
+            background: #2a2a2a;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 1px solid #3a3a3a;
+        }
+        h1, h2 { color: #4CAF50; }
+        button {
+            margin: 5px;
+            padding: 10px 15px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover { background: #45a049; }
+        button.danger { background: #f44336; }
+        button.danger:hover { background: #da190b; }
+        pre {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            border: 1px solid #3a3a3a;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border: 1px solid;
+        }
+        .success { 
+            background: #1e4620; 
+            border-color: #4CAF50;
+            color: #81C784;
+        }
+        .error { 
+            background: #4a1414; 
+            border-color: #f44336;
+            color: #EF9A9A;
+        }
+        .info { 
+            background: #1a3a4a; 
+            border-color: #2196F3;
+            color: #90CAF9;
+        }
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: #1a1a1a;
+            border-radius: 4px;
+            border: 1px solid #3a3a3a;
+        }
+        .checkbox-item input {
+            margin-right: 10px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .checkbox-item label {
+            cursor: pointer;
+            flex-grow: 1;
+        }
+        #live-storage {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Stash Suite Extension Debug Helper</h1>
+    
+    <div class="section">
+        <h2>📊 Extension Status</h2>
+        <div id="extension-status"></div>
+        <button onclick="checkExtensionStatus()">Refresh Status</button>
+        <button onclick="openStashTab()">Open Stash Tab</button>
+    </div>
+
+    <div class="section">
+        <h2>💾 Storage Management</h2>
+        <button onclick="viewStorage()">View Storage</button>
+        <button onclick="initializeDefaults()">Initialize Defaults</button>
+        <button class="danger" onclick="clearStorage()">Clear All Storage</button>
+        <button onclick="exportStorage()">Export Settings</button>
+        <button onclick="importSettings()">Import Settings</button>
+        <div id="storage-output"></div>
+    </div>
+
+    <div class="section">
+        <h2>🛠️ Tool Configuration</h2>
+        <div class="checkbox-grid" id="tool-checkboxes">
+            <!-- Populated by JavaScript -->
+        </div>
+        <button onclick="saveAllTools()">Save All Changes</button>
+        <button onclick="enableAllTools()">Enable All Tools</button>
+        <button onclick="disableAllTools()">Disable All Tools</button>
+    </div>
+
+    <div class="section">
+        <h2>🔄 Live Storage Monitor</h2>
+        <label>
+            <input type="checkbox" id="live-monitor" onchange="toggleLiveMonitor()">
+            Enable live monitoring
+        </label>
+        <pre id="live-storage"></pre>
+    </div>
+
+    <div class="section">
+        <h2>🧪 Test Actions</h2>
+        <button onclick="testNotification()">Test Notification</button>
+        <button onclick="testMessagePassing()">Test Message Passing</button>
+        <button onclick="testContentScript()">Test Content Script</button>
+        <button onclick="reloadExtension()">Reload Extension</button>
+        <div id="test-output"></div>
+    </div>
+
+    <div class="section">
+        <h2>📋 Console Commands</h2>
+        <p>Copy these commands to use in various consoles:</p>
+        <h3>Popup Console:</h3>
+        <pre>// View all storage
+chrome.storage.local.get(null).then(console.log)
+
+// Check specific tool
+chrome.storage.local.get('enableAutomateStash').then(console.log)
+
+// Force save a setting
+chrome.storage.local.set({ enableAutomateStash: true })</pre>
+        
+        <h3>Content Script Console (on Stash page):</h3>
+        <pre>// Check if extension loaded
+console.log(window.automateStash)
+
+// Manually initialize AutomateStash
+if (window.automateStash && !window.automateStash.initialized) {
+    window.automateStash.init()
+}
+
+// Show/Hide UI
+document.getElementById('stash-automation-panel').style.display = 'block'</pre>
+    </div>
+
+    <script src="debug-helper.js"></script>
+</body>
+</html>

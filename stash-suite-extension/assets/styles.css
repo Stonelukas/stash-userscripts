@@ -1,0 +1,329 @@
+/**
+ * Global styles for Stash Suite Extension content scripts
+ */
+
+/* Base styles for extension UI elements */
+.stash-suite-ui {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Panel styles */
+#stash-automation-panel,
+.stash-suite-panel {
+    position: fixed;
+    z-index: 10000;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    padding: 24px;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+}
+
+/* Minimized button styles */
+#stash-minimized-button,
+.stash-suite-minimized {
+    position: fixed;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+#stash-minimized-button:hover,
+.stash-suite-minimized:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Button styles */
+.stash-suite-btn {
+    background: linear-gradient(135deg, #00c853, #00a846);
+    border: none;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+.stash-suite-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 200, 83, 0.3);
+}
+
+.stash-suite-btn:active {
+    transform: translateY(0);
+}
+
+.stash-suite-btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.stash-suite-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+}
+
+.stash-suite-btn-danger {
+    background: linear-gradient(135deg, #d32f2f, #c62828);
+}
+
+.stash-suite-btn-danger:hover {
+    box-shadow: 0 4px 12px rgba(211, 47, 47, 0.3);
+}
+
+/* Dialog/Modal styles */
+.stash-suite-dialog {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border-radius: 16px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    padding: 32px;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    z-index: 10001;
+}
+
+.stash-suite-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    z-index: 10000;
+}
+
+/* Form styles */
+.stash-suite-form-group {
+    margin-bottom: 20px;
+}
+
+.stash-suite-form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+.stash-suite-input,
+.stash-suite-select {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: #ffffff;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+.stash-suite-input:focus,
+.stash-suite-select:focus {
+    border-color: #00c853;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.stash-suite-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.stash-suite-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+/* Progress bar styles */
+.stash-suite-progress {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 20px 0;
+}
+
+.stash-suite-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #00c853, #00a846);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+/* Status indicators */
+.stash-suite-status {
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.stash-suite-status-success {
+    background: rgba(0, 200, 83, 0.1);
+    border: 1px solid rgba(0, 200, 83, 0.3);
+}
+
+.stash-suite-status-error {
+    background: rgba(211, 47, 47, 0.1);
+    border: 1px solid rgba(211, 47, 47, 0.3);
+}
+
+.stash-suite-status-warning {
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+/* Badge styles */
+.stash-suite-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin: 2px;
+}
+
+.stash-suite-badge-success {
+    background: rgba(0, 200, 83, 0.2);
+    color: #00ff6a;
+}
+
+.stash-suite-badge-error {
+    background: rgba(211, 47, 47, 0.2);
+    color: #ff5252;
+}
+
+.stash-suite-badge-warning {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ffd54f;
+}
+
+/* Scrollbar styles for extension UI */
+.stash-suite-ui::-webkit-scrollbar,
+.stash-suite-dialog::-webkit-scrollbar {
+    width: 8px;
+}
+
+.stash-suite-ui::-webkit-scrollbar-track,
+.stash-suite-dialog::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+.stash-suite-ui::-webkit-scrollbar-thumb,
+.stash-suite-dialog::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.stash-suite-ui::-webkit-scrollbar-thumb:hover,
+.stash-suite-dialog::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Animation classes */
+@keyframes stash-suite-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes stash-suite-slide-in {
+    from {
+        transform: translateX(100%);
+    }
+    to {
+        transform: translateX(0);
+    }
+}
+
+@keyframes stash-suite-pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.stash-suite-fade-in {
+    animation: stash-suite-fade-in 0.3s ease;
+}
+
+.stash-suite-slide-in {
+    animation: stash-suite-slide-in 0.3s ease;
+}
+
+.stash-suite-pulse {
+    animation: stash-suite-pulse 2s infinite;
+}
+
+/* Utility classes */
+.stash-suite-hidden {
+    display: none !important;
+}
+
+.stash-suite-text-center {
+    text-align: center;
+}
+
+.stash-suite-mt-20 {
+    margin-top: 20px;
+}
+
+.stash-suite-mb-20 {
+    margin-bottom: 20px;
+}
+
+.stash-suite-flex {
+    display: flex;
+}
+
+.stash-suite-flex-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.stash-suite-gap-10 {
+    gap: 10px;
+}

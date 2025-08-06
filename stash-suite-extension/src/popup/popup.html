@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Stash Suite</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="popup-container">
+        <header>
+            <img src="/icons/icon-48.png" alt="Stash Suite" class="logo">
+            <div class="header-text">
+                <h1>Stash Suite</h1>
+                <span class="version" id="version">v1.0.0</span>
+            </div>
+        </header>
+
+        <section class="status-section">
+            <h2>Extension Status</h2>
+            <div class="status-indicator">
+                <span class="status-dot" id="status-dot"></span>
+                <span class="status-text" id="status-text">Checking...</span>
+            </div>
+        </section>
+
+        <section class="tools-section">
+            <h2>Active Tools</h2>
+            <div class="tools-list">
+                <div class="tool-item">
+                    <label class="switch">
+                        <input type="checkbox" id="tool-automateStash" data-tool="AutomateStash">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="tool-name">AutomateStash</span>
+                </div>
+                
+                <div class="tool-item">
+                    <label class="switch">
+                        <input type="checkbox" id="tool-bulkOperations" data-tool="BulkOperations">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="tool-name">Bulk Operations</span>
+                </div>
+                
+                <div class="tool-item">
+                    <label class="switch">
+                        <input type="checkbox" id="tool-qualityAnalyzer" data-tool="QualityAnalyzer">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="tool-name">Quality Analyzer</span>
+                </div>
+                
+                <div class="tool-item">
+                    <label class="switch">
+                        <input type="checkbox" id="tool-performanceMonitor" data-tool="PerformanceMonitor">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="tool-name">Performance Monitor</span>
+                </div>
+                
+                <div class="tool-item">
+                    <label class="switch">
+                        <input type="checkbox" id="tool-performerManager" data-tool="PerformerManager">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="tool-name">Performer Manager</span>
+                </div>
+                
+                <div class="tool-item">
+                    <label class="switch">
+                        <input type="checkbox" id="tool-collectionOrganizer" data-tool="CollectionOrganizer">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="tool-name">Collection Organizer</span>
+                </div>
+                
+                <div class="tool-item">
+                    <label class="switch">
+                        <input type="checkbox" id="tool-exportImportTools" data-tool="ExportImportTools">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="tool-name">Export/Import Tools</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="settings-section">
+            <h2>Quick Settings</h2>
+            <div class="settings-list">
+                <div class="setting-item">
+                    <label>
+                        <input type="checkbox" id="setting-notifications">
+                        Show notifications
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <label>
+                        <input type="checkbox" id="setting-autoRefresh">
+                        Auto-refresh after operations
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <button id="open-stash" class="btn btn-primary">Open Stash</button>
+            <button id="open-settings" class="btn btn-secondary">Settings</button>
+        </footer>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

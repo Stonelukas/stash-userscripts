@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "Stash Suite",
+  "version": "1.0.0",
+  "description": "Comprehensive automation and management tools for Stash",
+  "author": "AutomateStash Suite",
+  
+  "permissions": [
+    "storage",
+    "activeTab",
+    "notifications",
+    "webNavigation",
+    "tabs"
+  ],
+  
+  "host_permissions": [
+    "http://localhost:9998/*"
+  ],
+  
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:9998/*"],
+      "exclude_matches": ["http://localhost:9998/scenes/markers?*"],
+      "js": ["src/content/main-bundle.js"],
+      "css": ["assets/styles.css"],
+      "run_at": "document_end"
+    }
+  ],
+  
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  
+  "options_page": "src/options/options.html",
+  
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/*", "icons/*", "debug-helper.html", "debug-helper.js", "test.html", "test.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
