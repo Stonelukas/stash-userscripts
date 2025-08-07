@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AutomateStash Final
-// @version      4.4.0
-// @description  AutomateStash with GraphQL API integration, real-time status updates, and organize state protection
+// @version      4.19.1
+// @description  AutomateStash - with post-automation summary widget
 // @author       You
 // @match        http://localhost:9998/*
 // @exclude      http://localhost:9998/scenes/markers?*
@@ -14,7 +14,6 @@
 (function () {
     'use strict';
 
-    console.log('🚀 AutomateStash Final v4.4.0 - GraphQL API integration, real-time status updates, organize state protection, and global availability');
 
     // ===== STASH API CONFIGURATION =====
     const STASH_API = {
@@ -37,7 +36,9 @@
         // New GraphQL-based options
         ENABLE_CROSS_SCENE_INTELLIGENCE: 'enableCrossSceneIntelligence',
         STASH_ADDRESS: 'stashAddress',
-        STASH_API_KEY: 'stashApiKey'
+        STASH_API_KEY: 'stashApiKey',
+        // Thumbnail comparison options
+        PREFER_HIGHER_RES_THUMBNAILS: 'preferHigherResThumbnails'
     };
 
     const DEFAULTS = {
@@ -52,7 +53,9 @@
         // New defaults for GraphQL features
         [CONFIG.ENABLE_CROSS_SCENE_INTELLIGENCE]: true,
         [CONFIG.STASH_ADDRESS]: 'http://localhost:9998',
-        [CONFIG.STASH_API_KEY]: ''
+        [CONFIG.STASH_API_KEY]: '',
+        // Thumbnail comparison defaults
+        [CONFIG.PREFER_HIGHER_RES_THUMBNAILS]: true
     };
 
     function getConfig(key) {
@@ -178,13 +181,11 @@
                 const result = await response.json();
                 
                 if (result.errors) {
-                    console.error('❌ GraphQL errors:', result.errors);
                     throw new Error(`GraphQL errors: ${result.errors.map(e => e.message).join(', ')}`);
                 }
 
                 return result.data;
             } catch (error) {
-                console.error('❌ GraphQL query failed:', error);
                 throw error;
             }
         }
@@ -343,13 +344,11 @@
          * @returns {Object} Detection result with confidence level and detected data
          */
         async detectStashDBData() {
-            console.log('🔍 Detecting StashDB data...');
             
             // Always try GraphQL first for most accurate results
             try {
                 const graphqlResult = await this.validateStashDBGraphQL();
                 if (graphqlResult.found) {
-                    console.log(`✅ StashDB detected via GraphQL (confidence: 100%)`);
                     return {
                         ...graphqlResult,
                         strategy: 'stashdb_graphql',
@@ -357,7 +356,6 @@
                     };
                 }
             } catch (error) {
-                console.warn('⚠️ GraphQL detection failed, falling back to DOM:', error);
             }
             
             // Fall back to DOM-based detection if GraphQL fails
@@ -385,15 +383,12 @@
                     }
                     
                     if (result && result.found) {
-                        console.log(`✅ StashDB detected via ${strategy.name} (confidence: ${strategy.confidence}%)`);
                         return result;
                     }
                 } catch (error) {
-                    console.error(`❌ Error in StashDB detection strategy ${strategy.name}:`, error);
                 }
             }
             
-            console.log('❌ StashDB data not detected');
             return { found: false, confidence: 0, data: null };
         }
 
@@ -402,13 +397,11 @@
          * @returns {Object} Detection result with confidence level and detected data
          */
         async detectThePornDBData() {
-            console.log('🔍 Detecting ThePornDB data...');
             
             // Always try GraphQL first for most accurate results
             try {
                 const graphqlResult = await this.validateThePornDBGraphQL();
                 if (graphqlResult.found) {
-                    console.log(`✅ ThePornDB detected via GraphQL (confidence: 100%)`);
                     return {
                         ...graphqlResult,
                         strategy: 'theporndb_graphql',
@@ -416,7 +409,6 @@
                     };
                 }
             } catch (error) {
-                console.warn('⚠️ GraphQL detection failed, falling back to DOM:', error);
             }
             
             // Fall back to DOM-based detection if GraphQL fails
@@ -444,15 +436,12 @@
                     }
                     
                     if (result && result.found) {
-                        console.log(`✅ ThePornDB detected via ${strategy.name} (confidence: ${strategy.confidence}%)`);
                         return result;
                     }
                 } catch (error) {
-                    console.error(`❌ Error in ThePornDB detection strategy ${strategy.name}:`, error);
                 }
             }
             
-            console.log('❌ ThePornDB data not detected');
             return { found: false, confidence: 0, data: null };
         }
 
@@ -461,13 +450,11 @@
          * @returns {Object} Detection result with confidence level
          */
         async detectOrganizedStatus() {
-            console.log('🔍 Detecting organized status...');
             
             // Always try GraphQL first for most accurate results
             try {
                 const graphqlResult = await this.validateOrganizedGraphQL();
                 if (graphqlResult.found) {
-                    console.log(`✅ Organized status detected via GraphQL (confidence: 100%): ${graphqlResult.organized}`);
                     return {
                         ...graphqlResult,
                         strategy: 'organized_graphql',
@@ -475,7 +462,6 @@
                     };
                 }
             } catch (error) {
-                console.warn('⚠️ GraphQL detection failed, falling back to DOM:', error);
             }
             
             // Fall back to DOM-based detection if GraphQL fails
@@ -504,15 +490,12 @@
                     }
                     
                     if (result && result.found) {
-                        console.log(`✅ Organized status detected via ${strategy.name} (confidence: ${strategy.confidence}%): ${result.organized}`);
                         return result;
                     }
                 } catch (error) {
-                    console.error(`❌ Error in organized status detection strategy ${strategy.name}:`, error);
                 }
             }
             
-            console.log('❌ Organized status not detected');
             return { found: false, confidence: 0, organized: false };
         }
 
@@ -521,7 +504,6 @@
          * @returns {Array} List of available scraping options
          */
         async scanAvailableSources() {
-            console.log('🔍 Scanning for available scraping sources...');
             
             const sources = [];
             
@@ -576,7 +558,6 @@
                 }
             });
             
-            console.log(`📊 Found ${sources.length} available scraping sources:`, sources);
             return sources;
         }
 
@@ -727,7 +708,6 @@
                 return result;
 
             } catch (error) {
-                console.error('❌ GraphQL StashDB validation failed:', error);
                 return { found: false, reason: `GraphQL error: ${error.message}` };
             }
         }
@@ -780,7 +760,6 @@
                 return result;
 
             } catch (error) {
-                console.error('❌ GraphQL ThePornDB validation failed:', error);
                 return { found: false, reason: `GraphQL error: ${error.message}` };
             }
         }
@@ -825,7 +804,6 @@
                 return result;
 
             } catch (error) {
-                console.error('❌ GraphQL organized validation failed:', error);
                 return { found: false, reason: `GraphQL error: ${error.message}` };
             }
         }
@@ -970,7 +948,6 @@
          * @returns {Object} Complete status object
          */
         async detectCurrentStatus() {
-            console.log('📊 Detecting current scene status...');
             
             try {
                 // Extract scene ID from URL
@@ -1002,14 +979,12 @@
                 const organizedResult = await this.sourceDetector.detectOrganizedStatus();
                 this.currentStatus.organized = organizedResult.organized || false;
 
-                console.log('✅ Scene status detection completed:', this.currentStatus);
                 
                 // Notify callbacks of status update
                 this.notifyStatusUpdate();
                 
                 return this.currentStatus;
             } catch (error) {
-                console.error('❌ Error detecting scene status:', error);
                 return this.currentStatus;
             }
         }
@@ -1020,7 +995,6 @@
          * @param {Object} data - Update data
          */
         updateStatus(source, data) {
-            console.log(`📝 Updating ${source} status:`, data);
             
             switch (source) {
                 case 'stashdb':
@@ -1164,7 +1138,6 @@
                 try {
                     callback(summary);
                 } catch (error) {
-                    console.error('❌ Error in status update callback:', error);
                 }
             });
         }
@@ -1261,7 +1234,6 @@
          * @param {Object} data - Automation data to save
          */
         async saveAutomationHistory(sceneId, data) {
-            console.log(`💾 Saving automation history for scene ${sceneId}:`, data);
             
             try {
                 const history = await this.getAllHistory();
@@ -1294,16 +1266,13 @@
                 // Limit history size
                 if (history.length > this.maxHistoryEntries) {
                     history.splice(this.maxHistoryEntries);
-                    console.log(`🧹 Trimmed history to ${this.maxHistoryEntries} entries`);
                 }
                 
                 // Save to persistent storage
                 GM_setValue(this.storageKey, JSON.stringify(history));
                 
-                console.log('✅ Automation history saved successfully');
                 return historyEntry;
             } catch (error) {
-                console.error('❌ Error saving automation history:', error);
                 return null;
             }
         }
@@ -1314,16 +1283,13 @@
          * @returns {Array} Array of history entries for the scene
          */
         async getSceneHistory(sceneId) {
-            console.log(`📖 Retrieving history for scene ${sceneId}`);
             
             try {
                 const allHistory = await this.getAllHistory();
                 const sceneHistory = allHistory.filter(entry => entry.sceneId === sceneId);
                 
-                console.log(`📊 Found ${sceneHistory.length} history entries for scene ${sceneId}`);
                 return sceneHistory;
             } catch (error) {
-                console.error('❌ Error retrieving scene history:', error);
                 return [];
             }
         }
@@ -1346,13 +1312,11 @@
                 });
                 
                 if (validHistory.length !== history.length) {
-                    console.log(`🧹 Cleaned up ${history.length - validHistory.length} invalid history entries`);
                     GM_setValue(this.storageKey, JSON.stringify(validHistory));
                 }
                 
                 return validHistory;
             } catch (error) {
-                console.error('❌ Error parsing history from storage:', error);
                 // Reset to empty history if corrupted
                 GM_setValue(this.storageKey, '[]');
                 return [];
@@ -1374,7 +1338,6 @@
          * @returns {Object} Statistics about automation history
          */
         async getStatistics() {
-            console.log('📊 Calculating automation statistics...');
             
             try {
                 const history = await this.getAllHistory();
@@ -1413,10 +1376,8 @@
                 stats.successRate = stats.totalAutomations > 0 ? 
                     Math.round((stats.successfulAutomations / stats.totalAutomations) * 100) : 0;
                 
-                console.log('📈 Automation statistics:', stats);
                 return stats;
             } catch (error) {
-                console.error('❌ Error calculating statistics:', error);
                 return {
                     totalAutomations: 0,
                     successfulAutomations: 0,
@@ -1435,14 +1396,11 @@
          * Clear all automation history
          */
         async clearHistory() {
-            console.log('🗑️ Clearing all automation history...');
             
             try {
                 GM_setValue(this.storageKey, '[]');
-                console.log('✅ All automation history cleared');
                 return true;
             } catch (error) {
-                console.error('❌ Error clearing history:', error);
                 return false;
             }
         }
@@ -1452,7 +1410,6 @@
          * @param {number} days - Number of days to keep
          */
         async clearOldHistory(days = 30) {
-            console.log(`🧹 Clearing history older than ${days} days...`);
             
             try {
                 const history = await this.getAllHistory();
@@ -1468,10 +1425,8 @@
                 
                 GM_setValue(this.storageKey, JSON.stringify(recentHistory));
                 
-                console.log(`✅ Removed ${removedCount} old history entries, kept ${recentHistory.length} recent entries`);
                 return removedCount;
             } catch (error) {
-                console.error('❌ Error clearing old history:', error);
                 return 0;
             }
         }
@@ -1481,7 +1436,6 @@
          * @returns {string} JSON string of all history data
          */
         async exportHistory() {
-            console.log('📤 Exporting automation history...');
             
             try {
                 const history = await this.getAllHistory();
@@ -1495,11 +1449,9 @@
                 };
                 
                 const exportJson = JSON.stringify(exportData, null, 2);
-                console.log(`✅ Exported ${history.length} history entries`);
                 
                 return exportJson;
             } catch (error) {
-                console.error('❌ Error exporting history:', error);
                 return null;
             }
         }
@@ -1510,7 +1462,6 @@
          * @returns {boolean} Success status
          */
         async importHistory(jsonData) {
-            console.log('📥 Importing automation history...');
             
             try {
                 const importData = JSON.parse(jsonData);
@@ -1557,12 +1508,9 @@
                 // Save merged history
                 GM_setValue(this.storageKey, JSON.stringify(mergedHistory));
                 
-                console.log(`✅ Successfully imported ${validEntries.length} history entries`);
-                console.log(`📊 Total history entries: ${mergedHistory.length}`);
                 
                 return true;
             } catch (error) {
-                console.error('❌ Error importing history:', error);
                 return false;
             }
         }
@@ -1586,7 +1534,6 @@
                     storageKey: this.storageKey
                 };
             } catch (error) {
-                console.error('❌ Error getting storage info:', error);
                 return {
                     entries: 0,
                     sizeBytes: 0,
@@ -1598,6 +1545,578 @@
         }
     }
 
+    // ===== AUTOMATION SUMMARY WIDGET =====
+    class AutomationSummaryWidget {
+        constructor() {
+            this.summaryData = {
+                startTime: null,
+                endTime: null,
+                sceneName: '',
+                sceneId: '',
+                actions: [],
+                sourcesUsed: [],
+                fieldsUpdated: [],
+                errors: [],
+                warnings: [],
+                success: false
+            };
+            
+            this.widget = null;
+            this.isMinimized = true;
+            
+            // Delay widget creation to ensure DOM is ready
+            setTimeout(() => {
+                this.createMinimizedWidget();
+            }, 1000);
+        }
+        
+        createMinimizedWidget() {
+            // Check if widget already exists to avoid duplicates
+            if (document.querySelector('#automation-summary-widget')) {
+                return;
+            }
+            
+            // Create minimized widget at bottom right
+            this.widget = document.createElement('div');
+            this.widget.id = 'automation-summary-widget';
+            this.widget.style.cssText = `
+                position: fixed !important;
+                bottom: 20px !important;
+                right: 20px !important;
+                background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%) !important;
+                border-radius: 10px !important;
+                padding: 10px 15px !important;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
+                z-index: 10000 !important;
+                color: white !important;
+                font-family: 'Segoe UI', sans-serif !important;
+                display: none !important;
+                align-items: center !important;
+                gap: 10px !important;
+                cursor: pointer !important;
+                transition: all 0.3s ease !important;
+                border: 1px solid rgba(255,255,255,0.1);
+                opacity: 0.8;
+                min-width: 200px;
+            `;
+            
+            this.widget.innerHTML = `
+                <span style="font-size: 16px;">📊</span>
+                <span style="font-size: 13px;">Summary Ready</span>
+            `;
+            
+            // Store click handler reference so we can remove it later
+            this.expandHandler = (e) => {
+                // Don't expand if clicking close button
+                if (e.target.tagName === 'BUTTON') return;
+                if (this.isMinimized && this.summaryData.endTime) {
+                    this.expandWidget();
+                }
+            };
+            
+            // Add click handler
+            this.widget.addEventListener('click', this.expandHandler);
+            
+            // Add hover effect
+            this.widget.addEventListener('mouseenter', () => {
+                this.widget.style.opacity = '1';
+                this.widget.style.transform = 'scale(1.05)';
+            });
+            
+            this.widget.addEventListener('mouseleave', () => {
+                if (this.isMinimized) {
+                    this.widget.style.opacity = '0.8';
+                    this.widget.style.transform = 'scale(1)';
+                }
+            });
+            
+            // Add CSS animation
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideInRight {
+                    from {
+                        transform: translateX(100%);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateX(0);
+                        opacity: 0.8;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // Append to body
+            if (document.body) {
+                document.body.appendChild(this.widget);
+            } else {
+            }
+        }
+
+        reset() {
+            this.summaryData = {
+                startTime: null,
+                endTime: null,
+                sceneName: '',
+                sceneId: '',
+                actions: [],
+                sourcesUsed: [],
+                fieldsUpdated: [],
+                errors: [],
+                warnings: [],
+                success: false
+            };
+        }
+
+        startTracking(sceneName, sceneId) {
+            this.reset();
+            this.summaryData.startTime = new Date();
+            this.summaryData.sceneName = sceneName;
+            this.summaryData.sceneId = sceneId;
+            
+            // Hide widget at start
+            if (this.widget) {
+                this.widget.style.display = 'none';
+                this.isMinimized = true;
+            }
+            
+        }
+
+        addAction(action, status = 'success', details = '') {
+            this.summaryData.actions.push({
+                action,
+                status,
+                details,
+                timestamp: new Date()
+            });
+        }
+
+        addSource(source) {
+            if (!this.summaryData.sourcesUsed.includes(source)) {
+                this.summaryData.sourcesUsed.push(source);
+            }
+        }
+
+        addFieldUpdate(field, oldValue, newValue) {
+            this.summaryData.fieldsUpdated.push({
+                field,
+                oldValue: oldValue || 'empty',
+                newValue: newValue || 'empty'
+            });
+        }
+
+        addError(error) {
+            this.summaryData.errors.push(error);
+        }
+
+        addWarning(warning) {
+            this.summaryData.warnings.push(warning);
+        }
+
+        finishTracking(success) {
+            this.summaryData.endTime = new Date();
+            this.summaryData.success = success;
+            const duration = (this.summaryData.endTime - this.summaryData.startTime) / 1000;
+        }
+
+        expandWidget() {
+            try {
+                const { startTime, endTime, sceneName, actions, sourcesUsed, fieldsUpdated, errors, warnings, success } = this.summaryData;
+                const duration = endTime && startTime ? ((endTime - startTime) / 1000).toFixed(1) : '0';
+                
+
+                // Clear minimized content and expand
+                this.widget.innerHTML = '';
+                this.isMinimized = false;
+                
+                // Load saved position or use default
+                const savedPosition = GM_getValue('summary_widget_position', null);
+                const left = savedPosition ? savedPosition.left : 'auto';
+                const top = savedPosition ? savedPosition.top : 'auto';
+                const right = savedPosition ? 'auto' : '20px';
+                const bottom = savedPosition ? 'auto' : '20px';
+                
+                // Update widget styles for expanded state
+                this.widget.style.cssText = `
+                    position: fixed !important;
+                    ${savedPosition ? `left: ${left}px !important;` : ''}
+                    ${savedPosition ? `top: ${top}px !important;` : ''}
+                    ${!savedPosition ? `bottom: ${bottom} !important;` : ''}
+                    ${!savedPosition ? `right: ${right} !important;` : ''}
+                    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%) !important;
+                    border-radius: 15px !important;
+                    padding: 20px !important;
+                    width: 350px !important;
+                    max-height: 500px !important;
+                    overflow-y: auto !important;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+                    z-index: 10000 !important;
+                    color: white !important;
+                    font-family: 'Segoe UI', sans-serif !important;
+                    display: block !important;
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255,255,255,0.1);
+                    cursor: default !important;
+                    opacity: 1 !important;
+                    transform: scale(1) !important;
+                    transition: all 0.3s ease !important;
+                `;
+
+            // Header with close button
+            const header = document.createElement('div');
+            header.style.cssText = `
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+                padding-bottom: 10px;
+                border-bottom: 2px solid rgba(255,255,255,0.1);
+            `;
+
+            const title = document.createElement('div');
+            title.innerHTML = `
+                <h3 style="margin: 0 0 5px 0; font-size: 18px; color: ${success ? '#2ecc71' : '#f39c12'};">
+                    ${success ? '✅ Automation Complete' : '⚠️ Automation Finished'}
+                </h3>
+                <div style="font-size: 12px; opacity: 0.7;">
+                    ${sceneName || 'Scene'} • ${duration}s
+                </div>
+            `;
+
+            const closeBtn = document.createElement('button');
+            closeBtn.innerHTML = '✖';
+            closeBtn.style.cssText = `
+                background: rgba(255,255,255,0.2);
+                border: none;
+                color: white;
+                width: 25px;
+                height: 25px;
+                border-radius: 50%;
+                cursor: pointer;
+                font-size: 16px;
+                transition: all 0.2s ease;
+            `;
+            closeBtn.addEventListener('click', () => {
+                this.minimizeWidget();
+            });
+
+            header.appendChild(title);
+            header.appendChild(closeBtn);
+
+            // Scene info
+            const sceneInfo = document.createElement('div');
+            sceneInfo.style.cssText = `
+                background: rgba(255,255,255,0.05);
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 15px;
+            `;
+            sceneInfo.innerHTML = `
+                <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">📹 ${sceneName || 'Scene'}</div>
+                <div style="font-size: 13px; opacity: 0.8;">⏱️ Duration: ${duration}s</div>
+            `;
+
+            // Sources used
+            let sourcesSection = null;
+            if (sourcesUsed.length > 0) {
+                sourcesSection = document.createElement('div');
+                sourcesSection.style.cssText = `
+                    background: rgba(52, 152, 219, 0.1);
+                    padding: 12px;
+                    border-radius: 8px;
+                    margin-bottom: 15px;
+                    border: 1px solid rgba(52, 152, 219, 0.3);
+                `;
+                sourcesSection.innerHTML = `
+                    <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">🔍 Sources Used</div>
+                    <div style="font-size: 13px;">
+                        ${sourcesUsed.map(s => `<span style="display: inline-block; background: rgba(52, 152, 219, 0.2); padding: 3px 8px; border-radius: 4px; margin: 2px;">${s}</span>`).join('')}
+                    </div>
+                `;
+            }
+
+            // Actions performed
+            const actionsSection = document.createElement('div');
+            actionsSection.style.cssText = `
+                background: rgba(46, 204, 113, 0.1);
+                padding: 12px;
+                border-radius: 8px;
+                margin-bottom: 15px;
+                border: 1px solid rgba(46, 204, 113, 0.3);
+            `;
+            
+            const successActions = actions.filter(a => a.status === 'success');
+            const skippedActions = actions.filter(a => a.status === 'skip');
+            
+            actionsSection.innerHTML = `
+                <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">📋 Actions Performed</div>
+                <div style="font-size: 12px; max-height: 150px; overflow-y: auto;">
+                    ${successActions.map(a => `<div style="margin: 3px 0;">✅ ${a.action} ${a.details ? `- ${a.details}` : ''}</div>`).join('')}
+                    ${skippedActions.length > 0 ? `<div style="opacity: 0.6; margin-top: 5px;">${skippedActions.map(a => `<div>⏭️ ${a.action} (skipped)</div>`).join('')}</div>` : ''}
+                </div>
+            `;
+
+            // Fields updated
+            let fieldsSection = null;
+            if (fieldsUpdated.length > 0) {
+                fieldsSection = document.createElement('div');
+                fieldsSection.style.cssText = `
+                    background: rgba(155, 89, 182, 0.1);
+                    padding: 12px;
+                    border-radius: 8px;
+                    margin-bottom: 15px;
+                    border: 1px solid rgba(155, 89, 182, 0.3);
+                `;
+                fieldsSection.innerHTML = `
+                    <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">📝 Fields Updated</div>
+                    <div style="font-size: 12px; max-height: 150px; overflow-y: auto;">
+                        ${fieldsUpdated.map(f => `
+                            <div style="margin: 5px 0; padding: 5px; background: rgba(0,0,0,0.2); border-radius: 4px;">
+                                <strong>${f.field}:</strong><br>
+                                <span style="opacity: 0.6;">From: ${f.oldValue}</span><br>
+                                <span style="color: #2ecc71;">To: ${f.newValue}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            // Errors and warnings
+            let issuesSection = null;
+            if (errors.length > 0 || warnings.length > 0) {
+                issuesSection = document.createElement('div');
+                issuesSection.style.cssText = `
+                    background: rgba(231, 76, 60, 0.1);
+                    padding: 12px;
+                    border-radius: 8px;
+                    margin-bottom: 15px;
+                    border: 1px solid rgba(231, 76, 60, 0.3);
+                `;
+                issuesSection.innerHTML = `
+                    <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">⚠️ Issues</div>
+                    <div style="font-size: 12px;">
+                        ${errors.map(e => `<div style="color: #e74c3c; margin: 3px 0;">❌ ${e}</div>`).join('')}
+                        ${warnings.map(w => `<div style="color: #f39c12; margin: 3px 0;">⚠️ ${w}</div>`).join('')}
+                    </div>
+                `;
+            }
+
+            // Summary stats
+            const stats = document.createElement('div');
+            stats.style.cssText = `
+                display: flex;
+                justify-content: space-around;
+                margin-top: 20px;
+                padding-top: 15px;
+                border-top: 1px solid rgba(255,255,255,0.1);
+                text-align: center;
+            `;
+            stats.innerHTML = `
+                <div>
+                    <div style="font-size: 24px; font-weight: bold; color: #3498db;">${successActions.length}</div>
+                    <div style="font-size: 11px; opacity: 0.7;">Actions</div>
+                </div>
+                <div>
+                    <div style="font-size: 24px; font-weight: bold; color: #9b59b6;">${fieldsUpdated.length}</div>
+                    <div style="font-size: 11px; opacity: 0.7;">Fields</div>
+                </div>
+                <div>
+                    <div style="font-size: 24px; font-weight: bold; color: ${errors.length > 0 ? '#e74c3c' : '#2ecc71'};">${errors.length}</div>
+                    <div style="font-size: 11px; opacity: 0.7;">Errors</div>
+                </div>
+            `;
+
+            // Assemble dialog
+            this.widget.appendChild(header);
+            this.widget.appendChild(sceneInfo);
+            
+            if (sourcesSection) {
+                this.widget.appendChild(sourcesSection);
+            }
+            
+            this.widget.appendChild(actionsSection);
+            
+            if (fieldsSection) {
+                this.widget.appendChild(fieldsSection);
+            }
+            
+            if (issuesSection) {
+                this.widget.appendChild(issuesSection);
+            }
+            
+            this.widget.appendChild(stats);
+
+            // Make widget draggable
+            this.makeDraggable(this.widget);
+            } catch (error) {
+            }
+        }
+
+        minimizeWidget() {
+            this.isMinimized = true;
+            
+            // Update to minimized state
+            this.widget.style.cssText = `
+                position: fixed !important;
+                bottom: 20px !important;
+                right: 20px !important;
+                background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%) !important;
+                border-radius: 10px !important;
+                padding: 10px 15px !important;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
+                z-index: 10000 !important;
+                color: white !important;
+                font-family: 'Segoe UI', sans-serif !important;
+                display: flex !important;
+                align-items: center !important;
+                gap: 10px !important;
+                cursor: pointer !important;
+                transition: all 0.3s ease !important;
+                border: 1px solid rgba(255,255,255,0.1);
+                opacity: 0.8;
+                min-width: 200px;
+            `;
+            
+            const success = this.summaryData.success;
+            this.widget.innerHTML = `
+                <span style="font-size: 16px;">${success ? '✅' : '❌'}</span>
+                <span style="font-size: 13px;">${success ? 'Automation Complete' : 'Automation Failed'}</span>
+            `;
+            
+            // Re-add click handler
+            this.widget.removeEventListener('click', this.expandHandler);
+            this.widget.addEventListener('click', this.expandHandler);
+        }
+        
+        showSummary() {
+            
+            if (!this.widget) {
+                this.createMinimizedWidget();
+            }
+            
+            if (this.summaryData.endTime && this.widget) {
+                
+                // Update content for minimized state
+                const success = this.summaryData.success;
+                this.widget.innerHTML = `
+                    <span style="font-size: 16px;">${success ? '✅' : '❌'}</span>
+                    <span style="font-size: 13px;">${success ? 'Automation Complete' : 'Automation Failed'}</span>
+                `;
+                
+                // Show the widget
+                this.widget.style.display = 'flex';
+                
+                // Re-add click handler since innerHTML was replaced
+                this.widget.addEventListener('click', this.expandHandler);
+                
+                // Add animation
+                this.widget.style.animation = 'slideInRight 0.3s ease';
+                
+                
+                // Auto-expand after a short delay
+                setTimeout(() => {
+                    if (this.isMinimized) {
+                        this.expandWidget();
+                    }
+                }, 1000);
+            }
+        }
+        
+        makeDraggable(element) {
+            // Find or create header element to use as drag handle
+            const header = element.querySelector('div');
+            if (!header) return;
+            
+            let isDragging = false;
+            let startX, startY, initialX, initialY;
+            
+            const dragStart = (e) => {
+                if (e.button !== 0) return; // Only left mouse button
+                
+                // Prevent dragging when clicking on buttons
+                if (e.target.tagName === 'BUTTON') {
+                    return;
+                }
+                
+                isDragging = true;
+                
+                // Get initial mouse position
+                startX = e.clientX;
+                startY = e.clientY;
+                
+                // Get initial element position
+                const rect = element.getBoundingClientRect();
+                initialX = rect.left;
+                initialY = rect.top;
+                
+                // Prevent text selection
+                e.preventDefault();
+                
+                // Change cursor
+                document.body.style.cursor = 'move';
+                
+                // Add active dragging style
+                element.style.transition = 'none';
+                element.style.opacity = '0.9';
+            };
+            
+            const dragMove = (e) => {
+                if (!isDragging) return;
+                
+                e.preventDefault();
+                
+                // Calculate new position
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+                
+                let newX = initialX + deltaX;
+                let newY = initialY + deltaY;
+                
+                // Boundary checking
+                const maxX = window.innerWidth - element.offsetWidth;
+                const maxY = window.innerHeight - element.offsetHeight;
+                
+                newX = Math.max(0, Math.min(newX, maxX));
+                newY = Math.max(0, Math.min(newY, maxY));
+                
+                // Apply new position
+                element.style.left = newX + 'px';
+                element.style.top = newY + 'px';
+                element.style.right = 'auto';
+                element.style.bottom = 'auto';
+            };
+            
+            const dragEnd = () => {
+                if (!isDragging) return;
+                
+                isDragging = false;
+                
+                // Restore cursor
+                document.body.style.cursor = '';
+                
+                // Restore element style
+                element.style.transition = '';
+                element.style.opacity = '';
+                
+                // Save position
+                const position = {
+                    left: element.offsetLeft,
+                    top: element.offsetTop
+                };
+                GM_setValue('summary_widget_position', position);
+            };
+            
+            // Set cursor style on header
+            header.style.cursor = 'move';
+            header.style.userSelect = 'none';
+            
+            // Add event listeners
+            header.addEventListener('mousedown', dragStart);
+            document.addEventListener('mousemove', dragMove);
+            document.addEventListener('mouseup', dragEnd);
+        }
+    }
+
     // ===== UI MANAGER =====
     class UIManager {
         constructor() {
@@ -1606,23 +2125,156 @@
             this.isMinimized = false;
             this.statusElement = null;
             
+            // Automation state flags
+            this.automationInProgress = false;
+            this.automationCancelled = false;
+            this.cancelButton = null;
+            
+            // Re-scrape state
+            this.rescrapeOptions = {
+                forceRescrape: false,
+                rescrapeStashDB: false,
+                rescrapeThePornDB: false
+            };
+            
             // Initialize enhanced status tracking components
             this.sourceDetector = new SourceDetector();
             this.statusTracker = new StatusTracker(this.sourceDetector);
             this.historyManager = new HistoryManager();
             
-            // Status display elements
-            this.statusSummaryElement = null;
-            this.debugPanelElement = null;
+            // Initialize automation summary widget (will be created when DOM is ready)
+            this.summaryWidget = null;
             
             // DOM mutation observer for real-time updates
             this.mutationObserver = null;
             this.lastStatusUpdate = Date.now();
             
+            // Draggable state
+            this.isDragging = false;
+            this.dragStartX = 0;
+            this.dragStartY = 0;
+            this.dragElementStartX = 0;
+            this.dragElementStartY = 0;
+            
+            // Load saved positions
+            this.savedPanelPosition = GM_getValue('panel_position', { top: 50, right: 10 });
+            this.savedButtonPosition = GM_getValue('button_position', { top: 50, right: 10 });
+            
             // Initialize mutation observer
             this.initializeMutationObserver();
             
-            console.log('✅ Enhanced status tracking system initialized');
+        }
+
+        /**
+         * Make an element draggable
+         * @param {HTMLElement} dragHandle - Element to use as drag handle
+         * @param {HTMLElement} elementToDrag - Element that will be moved
+         * @param {string} saveKey - 'panel' or 'button' for saving position
+         */
+        makeDraggable(dragHandle, elementToDrag, saveKey) {
+            let isDragging = false;
+            let startX, startY, initialX, initialY;
+            
+            const dragStart = (e) => {
+                if (e.button !== 0) return; // Only left mouse button
+                
+                // Prevent dragging when clicking on buttons
+                if (e.target.tagName === 'BUTTON' && e.target !== dragHandle) {
+                    return;
+                }
+                
+                isDragging = true;
+                
+                // Get initial mouse position
+                startX = e.clientX;
+                startY = e.clientY;
+                
+                // Get initial element position
+                const rect = elementToDrag.getBoundingClientRect();
+                initialX = rect.left;
+                initialY = rect.top;
+                
+                // Prevent text selection
+                e.preventDefault();
+                
+                // Change cursor
+                document.body.style.cursor = 'move';
+                
+                // Add active dragging style
+                elementToDrag.style.transition = 'none';
+                elementToDrag.style.opacity = '0.9';
+            };
+            
+            const dragMove = (e) => {
+                if (!isDragging) return;
+                
+                e.preventDefault();
+                
+                // Calculate new position
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+                
+                let newX = initialX + deltaX;
+                let newY = initialY + deltaY;
+                
+                // Boundary checking
+                const maxX = window.innerWidth - elementToDrag.offsetWidth;
+                const maxY = window.innerHeight - elementToDrag.offsetHeight;
+                
+                newX = Math.max(0, Math.min(newX, maxX));
+                newY = Math.max(0, Math.min(newY, maxY));
+                
+                // Apply new position
+                elementToDrag.style.left = newX + 'px';
+                elementToDrag.style.top = newY + 'px';
+                elementToDrag.style.right = 'auto';
+                elementToDrag.style.bottom = 'auto';
+            };
+            
+            const dragEnd = (e) => {
+                if (!isDragging) return;
+                
+                isDragging = false;
+                
+                // Reset cursor
+                document.body.style.cursor = 'auto';
+                
+                // Restore opacity and transition
+                elementToDrag.style.opacity = '1';
+                elementToDrag.style.transition = 'all 0.2s ease';
+                
+                // Save position
+                const rect = elementToDrag.getBoundingClientRect();
+                const position = {
+                    top: rect.top,
+                    right: window.innerWidth - rect.right
+                };
+                
+                if (saveKey === 'panel') {
+                    GM_setValue('panel_position', position);
+                    this.savedPanelPosition = position;
+                } else if (saveKey === 'button') {
+                    GM_setValue('button_position', position);
+                    this.savedButtonPosition = position;
+                }
+                
+            };
+            
+            // Add event listeners
+            dragHandle.addEventListener('mousedown', dragStart);
+            document.addEventListener('mousemove', dragMove);
+            document.addEventListener('mouseup', dragEnd);
+            
+            // Clean up on element removal
+            const observer = new MutationObserver((mutations) => {
+                if (!document.body.contains(elementToDrag)) {
+                    document.removeEventListener('mousemove', dragMove);
+                    document.removeEventListener('mouseup', dragEnd);
+                    observer.disconnect();
+                }
+            });
+            
+            observer.observe(document.body, { childList: true, subtree: true });
         }
 
         initializeMutationObserver() {
@@ -1645,7 +2297,6 @@
                         if (target.title === 'Organized' || 
                             target.classList.contains('organized-button') ||
                             target.textContent.toLowerCase().includes('organize')) {
-                            console.log('📊 Organize button state changed');
                             shouldUpdate = true;
                         }
                     }
@@ -1654,7 +2305,6 @@
                     if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
                         const target = mutation.target;
                         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-                            console.log('📊 Input value changed, potential scraper data update');
                             shouldUpdate = true;
                         }
                     }
@@ -1671,7 +2321,6 @@
                                     node.textContent.includes('StashDB') ||
                                     node.textContent.includes('ThePornDB')
                                 )) {
-                                    console.log('📊 Scraper-related content added to DOM');
                                     shouldUpdate = true;
                                 }
                             }
@@ -1692,7 +2341,6 @@
                     attributes: true,
                     attributeFilter: ['class', 'aria-pressed', 'value', 'data-organized']
                 });
-                console.log('👁️ DOM mutation observer initialized');
             } else {
                 // Wait for DOM to be ready
                 setTimeout(() => this.initializeMutationObserver(), 100);
@@ -1718,38 +2366,37 @@
             this.lastStatusUpdate = now;
 
             try {
-                console.log('📊 Updating scene status from DOM mutations...');
                 
                 // Update the status tracker with current status
                 await this.statusTracker.detectCurrentStatus();
                 
-                // Update the status summary widget if it exists
-                if (this.statusSummaryElement) {
-                    this.updateStatusSummaryContent(this.statusSummaryElement);
-                }
-                
                 // Keep the main status element simple
                 this.updateSceneStatus('⚡ Ready');
                 
-                console.log('📊 Status tracking updated from DOM');
             } catch (error) {
-                console.warn('⚠️ Error updating scene status from DOM:', error);
             }
         }
 
         createPanel() {
-            console.log('📱 Creating AutomateStash panel');
             this.cleanup();
+            
+            // Initialize summary widget if not already created
+            if (!this.summaryWidget) {
+                this.summaryWidget = new AutomationSummaryWidget();
+            }
             
             // Check if we're on a scene page
             const isScenePage = window.location.href.includes('/scenes/') && !window.location.href.includes('/scenes/markers');
 
             this.panel = document.createElement('div');
             this.panel.id = 'stash-automation-panel';
+            
+            // Use saved position or default
+            const position = this.savedPanelPosition;
             this.panel.style.cssText = `
                 position: fixed;
-                top: 50px;
-                right: 10px;
+                top: ${position.top}px;
+                right: ${position.right}px;
                 z-index: 10000;
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 border-radius: 15px;
@@ -1764,11 +2411,25 @@
             `;
 
             const header = this.createHeader();
+            const statusSummary = this.createStatusSummary();
             const content = this.createContent();
-            const buttons = this.createButtons();
-
+            
             this.panel.appendChild(header);
+            if (statusSummary) {
+                this.panel.appendChild(statusSummary);
+            }
             this.panel.appendChild(content);
+            
+            // Add re-scrape UI if on scene page and sources are already scraped
+            if (isScenePage) {
+                this.createRescrapeUI().then(rescrapeUI => {
+                    if (rescrapeUI) {
+                        this.panel.insertBefore(rescrapeUI, this.panel.lastChild);
+                    }
+                });
+            }
+            
+            const buttons = this.createButtons();
             this.panel.appendChild(buttons);
 
             document.body.appendChild(this.panel);
@@ -1777,7 +2438,6 @@
             // Initialize status tracking after panel is created
             this.initializeStatusTracking();
             
-            console.log('✅ Panel created successfully');
         }
 
         createHeader() {
@@ -1787,16 +2447,26 @@
                 justify-content: space-between;
                 align-items: center;
                 margin-bottom: 15px;
+                cursor: move;
+                user-select: none;
+                padding: 5px;
+                background: rgba(255,255,255,0.05);
+                border-radius: 8px;
             `;
+            
+            // Make header draggable
+            this.makeDraggable(header, this.panel, 'panel');
 
             const title = document.createElement('h3');
-            title.textContent = 'AutomateStash v4.2.0';
+            title.textContent = 'AutomateStash v4.19.1 🔀';
             title.style.cssText = `
                 color: white;
                 margin: 0;
                 font-size: 16px;
                 font-weight: 600;
+                user-select: none;
             `;
+            title.title = 'Drag to move';
 
             const minimizeBtn = document.createElement('button');
             minimizeBtn.innerHTML = '−';
@@ -1826,8 +2496,17 @@
 
             minimizeBtn.addEventListener('click', () => this.minimize());
 
+            const buttonsContainer = document.createElement('div');
+            buttonsContainer.style.cssText = `
+                display: flex;
+                gap: 5px;
+                align-items: center;
+            `;
+            
+            buttonsContainer.appendChild(minimizeBtn);
+            
             header.appendChild(title);
-            header.appendChild(minimizeBtn);
+            header.appendChild(buttonsContainer);
             return header;
         }
 
@@ -1871,7 +2550,122 @@
 
             content.appendChild(this.statusElement);
             content.appendChild(infoSection);
+            
+            // Add queue status display
+            const queueDisplay = document.createElement('div');
+            queueDisplay.id = 'stash-queue-display';
+            queueDisplay.style.cssText = `
+                margin-top: 15px;
+                border-top: 1px solid rgba(255,255,255,0.1);
+                padding-top: 15px;
+            `;
+            content.appendChild(queueDisplay);
+            
+            // Initial queue status update
             return content;
+        }
+
+        async createRescrapeUI() {
+            // Check if sources are already scraped
+            const alreadyScraped = await this.checkAlreadyScraped();
+            const hasScrapedSources = alreadyScraped.stashdb || alreadyScraped.theporndb;
+            
+            if (!hasScrapedSources) {
+                return null; // No need for re-scrape UI if nothing is scraped
+            }
+            
+            const rescrapeContainer = document.createElement('div');
+            rescrapeContainer.style.cssText = `
+                background: rgba(255,255,255,0.08);
+                padding: 12px;
+                border-radius: 8px;
+                margin-bottom: 15px;
+                border: 1px solid rgba(255,255,255,0.15);
+            `;
+            
+            const rescrapeTitle = document.createElement('div');
+            rescrapeTitle.style.cssText = `
+                font-size: 13px;
+                font-weight: 600;
+                margin-bottom: 10px;
+                color: rgba(255,255,255,0.95);
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            `;
+            rescrapeTitle.innerHTML = `🔄 Re-scrape Options`;
+            
+            const rescrapeInfo = document.createElement('div');
+            rescrapeInfo.style.cssText = `
+                font-size: 11px;
+                color: rgba(255,255,255,0.7);
+                margin-bottom: 10px;
+            `;
+            rescrapeInfo.innerHTML = `Detected existing scrapes: ${alreadyScraped.stashdb ? 'StashDB ✓' : ''} ${alreadyScraped.theporndb ? 'ThePornDB ✓' : ''}`;
+            
+            const checkboxContainer = document.createElement('div');
+            checkboxContainer.style.cssText = `
+                display: flex;
+                gap: 15px;
+                margin-bottom: 10px;
+                flex-wrap: wrap;
+            `;
+            
+            // StashDB checkbox
+            if (alreadyScraped.stashdb) {
+                const stashCheckLabel = document.createElement('label');
+                stashCheckLabel.style.cssText = `
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    color: rgba(255,255,255,0.9);
+                `;
+                
+                const stashCheck = document.createElement('input');
+                stashCheck.type = 'checkbox';
+                stashCheck.id = 'rescrape-stashdb';
+                stashCheck.style.cssText = `cursor: pointer;`;
+                stashCheck.addEventListener('change', (e) => {
+                    this.rescrapeOptions.rescrapeStashDB = e.target.checked;
+                });
+                
+                stashCheckLabel.appendChild(stashCheck);
+                stashCheckLabel.appendChild(document.createTextNode(' Force StashDB'));
+                checkboxContainer.appendChild(stashCheckLabel);
+            }
+            
+            // ThePornDB checkbox
+            if (alreadyScraped.theporndb) {
+                const pornCheckLabel = document.createElement('label');
+                pornCheckLabel.style.cssText = `
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    color: rgba(255,255,255,0.9);
+                `;
+                
+                const pornCheck = document.createElement('input');
+                pornCheck.type = 'checkbox';
+                pornCheck.id = 'rescrape-theporndb';
+                pornCheck.style.cssText = `cursor: pointer;`;
+                pornCheck.addEventListener('change', (e) => {
+                    this.rescrapeOptions.rescrapeThePornDB = e.target.checked;
+                });
+                
+                pornCheckLabel.appendChild(pornCheck);
+                pornCheckLabel.appendChild(document.createTextNode(' Force ThePornDB'));
+                checkboxContainer.appendChild(pornCheckLabel);
+            }
+            
+            rescrapeContainer.appendChild(rescrapeTitle);
+            rescrapeContainer.appendChild(rescrapeInfo);
+            rescrapeContainer.appendChild(checkboxContainer);
+            
+            return rescrapeContainer;
         }
 
         createButtons() {
@@ -1887,7 +2681,7 @@
 
             if (isScenePage) {
                 const startBtn = document.createElement('button');
-                startBtn.textContent = '🚀 Start Automation';
+                startBtn.innerHTML = '<strong>🚀 Start Automation</strong>';
                 startBtn.style.cssText = `
                     background: #27ae60;
                     color: white;
@@ -1900,9 +2694,23 @@
                     flex: 1;
                     min-width: 140px;
                     transition: all 0.2s ease;
+                    line-height: 1.2;
                 `;
-                startBtn.addEventListener('click', () => this.startAutomation());
+                startBtn.addEventListener('click', (event) => {
+                    if (!this.automationInProgress) {
+                        // Normal click runs immediately
+                        this.startAutomation();
+                        // Update button state
+                        startBtn.disabled = true;
+                        startBtn.innerHTML = '<strong>🔄 Automation in progress...</strong>';
+                        startBtn.style.background = '#95a5a6';
+                        startBtn.style.cursor = 'not-allowed';
+                    }
+                });
                 buttons.appendChild(startBtn);
+                
+                // Store reference to button for later updates
+                this.startButton = startBtn;
             } else {
                 // Show a message for non-scene pages
                 const infoText = document.createElement('div');
@@ -1930,31 +2738,16 @@
                 font-weight: 600;
                 transition: all 0.2s ease;
             `;
-            configBtn.addEventListener('click', () => this.showConfigDialog());
-
-            const debugBtn = document.createElement('button');
-            debugBtn.textContent = '🔍 Debug';
-            debugBtn.style.cssText = `
-                background: #6f42c1;
-                color: white;
-                border: none;
-                padding: 10px 16px;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 12px;
-                font-weight: 600;
-                transition: all 0.2s ease;
-            `;
-            debugBtn.addEventListener('click', () => {
-                console.log('🔍 Debug functionality has been removed for cleaner output');
+            configBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.showConfigDialog();
             });
 
             buttons.appendChild(configBtn);
-            buttons.appendChild(debugBtn);
             return buttons;
         }
         minimize() {
-            console.log('📱 Minimizing panel');
             if (this.panel) {
                 this.panel.style.display = 'none';
             }
@@ -1969,10 +2762,13 @@
 
             this.minimizedButton = document.createElement('button');
             this.minimizedButton.innerHTML = '🤖';
+            
+            // Use saved position or default
+            const position = this.savedButtonPosition;
             this.minimizedButton.style.cssText = `
                 position: fixed;
-                top: 50px;
-                right: 10px;
+                top: ${position.top}px;
+                right: ${position.right}px;
                 z-index: 10000;
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 color: white;
@@ -1980,18 +2776,26 @@
                 width: 50px;
                 height: 50px;
                 border-radius: 50%;
-                cursor: pointer;
+                cursor: move;
                 font-size: 20px;
                 box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-                transition: all 0.2s ease;
+                transition: opacity 0.2s ease;
+                user-select: none;
             `;
+            
+            // Make button draggable
+            this.makeDraggable(this.minimizedButton, this.minimizedButton, 'button');
+            
+            // Double-click to expand
+            this.minimizedButton.addEventListener('dblclick', () => this.expand());
+            
+            // Add tooltip
+            this.minimizedButton.title = 'Double-click to open, drag to move';
 
-            this.minimizedButton.addEventListener('click', () => this.expand());
             document.body.appendChild(this.minimizedButton);
         }
 
         expand() {
-            console.log('📱 Expanding panel');
             if (this.minimizedButton) {
                 this.minimizedButton.remove();
                 this.minimizedButton = null;
@@ -2008,7 +2812,11 @@
             if (this.statusElement) {
                 this.statusElement.textContent = status;
             }
-            console.log('📊 Status:', status);
+        }
+        
+        showNotification(message, type = 'info', duration = 4000) {
+            const notificationManager = new NotificationManager();
+            return notificationManager.show(message, type, duration);
         }
 
         showConfigDialog() {
@@ -2070,7 +2878,8 @@
                 { key: CONFIG.MINIMIZE_WHEN_COMPLETE, label: 'Minimize UI when complete' },
                 { key: CONFIG.AUTO_APPLY_CHANGES, label: 'Auto-apply changes (no confirmation)' },
                 { key: CONFIG.SKIP_ALREADY_SCRAPED, label: 'Skip already scraped sources' },
-                { key: CONFIG.ENABLE_CROSS_SCENE_INTELLIGENCE, label: '🧠 Enable cross-scene intelligence (GraphQL)' }
+                { key: CONFIG.ENABLE_CROSS_SCENE_INTELLIGENCE, label: '🧠 Enable cross-scene intelligence (GraphQL)' },
+                { key: CONFIG.PREFER_HIGHER_RES_THUMBNAILS, label: '🖼️ Prefer higher resolution thumbnails' }
             ];
 
             const optionsContainer = document.createElement('div');
@@ -2102,6 +2911,7 @@
                 label.appendChild(text);
                 optionsContainer.appendChild(label);
             });
+
 
             // GraphQL API Configuration section
             const graphqlSection = document.createElement('div');
@@ -2242,152 +3052,7 @@
             graphqlSection.appendChild(apiKeyInput);
             graphqlSection.appendChild(testConnectionBtn);
 
-            // Enhanced Status Tracking & Debug section
-            const debugSection = document.createElement('div');
-            debugSection.style.cssText = `
-                margin: 20px 0;
-                padding: 15px;
-                background: rgba(46, 204, 113, 0.1);
-                border-radius: 8px;
-                border: 1px solid rgba(46, 204, 113, 0.3);
-            `;
 
-            const debugTitle = document.createElement('h3');
-            debugTitle.textContent = '📊 Enhanced Status Tracking & Diagnostics';
-            debugTitle.style.cssText = `
-                margin: 0 0 10px 0;
-                color: #2ecc71;
-                font-size: 16px;
-            `;
-
-            const debugDesc = document.createElement('p');
-            debugDesc.textContent = 'Advanced debugging and status tracking tools';
-            debugDesc.style.cssText = `
-                margin: 0 0 15px 0;
-                font-size: 13px;
-                color: #bdc3c7;
-            `;
-
-            const debugButtonsContainer = document.createElement('div');
-            debugButtonsContainer.style.cssText = `
-                display: flex;
-                gap: 10px;
-                flex-wrap: wrap;
-                justify-content: center;
-                margin-bottom: 15px;
-            `;
-
-            const debugButtons = [
-                { id: 'debug-status', text: '📊 Current Status', color: '#2ecc71' },
-                { id: 'debug-sources', text: '🔍 Scan Sources', color: '#3498db' },
-                { id: 'debug-history', text: '📚 View History', color: '#9b59b6' },
-                { id: 'debug-export', text: '📤 Export Data', color: '#f39c12' },
-                { id: 'debug-clear', text: '🗑️ Clear History', color: '#e74c3c' }
-            ];
-
-            debugButtons.forEach(btn => {
-                const button = document.createElement('button');
-                button.id = btn.id;
-                button.textContent = btn.text;
-                button.style.cssText = `
-                    background: ${btn.color};
-                    color: white;
-                    border: none;
-                    padding: 8px 12px;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-size: 11px;
-                    font-weight: 600;
-                    transition: all 0.2s ease;
-                `;
-                debugButtonsContainer.appendChild(button);
-            });
-
-            // Debug output area
-            const debugOutput = document.createElement('div');
-            debugOutput.id = 'debug-output';
-            debugOutput.style.cssText = `
-                background: rgba(0,0,0,0.3);
-                border-radius: 4px;
-                padding: 10px;
-                max-height: 200px;
-                overflow-y: auto;
-                font-family: 'Courier New', monospace;
-                font-size: 11px;
-                color: #ecf0f1;
-                border: 1px solid rgba(255,255,255,0.1);
-                white-space: pre-wrap;
-                display: none;
-            `;
-            debugOutput.textContent = 'Debug output will appear here...';
-
-            debugSection.appendChild(debugTitle);
-            debugSection.appendChild(debugDesc);
-            debugSection.appendChild(debugButtonsContainer);
-            debugSection.appendChild(debugOutput);
-
-            // Testing section
-            const testingSection = document.createElement('div');
-            testingSection.style.cssText = `
-                margin: 20px 0;
-                padding: 15px;
-                background: rgba(52, 152, 219, 0.1);
-                border-radius: 8px;
-                border: 1px solid rgba(52, 152, 219, 0.3);
-            `;
-
-            const testingTitle = document.createElement('h3');
-            testingTitle.textContent = '🧪 Testing & Validation';
-            testingTitle.style.cssText = `
-                margin: 0 0 10px 0;
-                color: #3498db;
-                font-size: 16px;
-            `;
-
-            const testingDesc = document.createElement('p');
-            testingDesc.textContent = 'Test functionality and validate performance';
-            testingDesc.style.cssText = `
-                margin: 0 0 15px 0;
-                font-size: 13px;
-                color: #bdc3c7;
-            `;
-
-            const testButtonsContainer = document.createElement('div');
-            testButtonsContainer.style.cssText = `
-                display: flex;
-                gap: 10px;
-                flex-wrap: wrap;
-                justify-content: center;
-            `;
-
-            const testButtons = [
-                { id: 'test-minimize', text: '🧪 Test Minimize', color: '#3498db' },
-                { id: 'test-context', text: '🔍 Context Check', color: '#9b59b6' },
-                { id: 'test-buttons', text: '🔘 List Buttons', color: '#f39c12' },
-                { id: 'test-forms', text: '📋 Analyze Forms', color: '#e67e22' }
-            ];
-
-            testButtons.forEach(btn => {
-                const button = document.createElement('button');
-                button.id = btn.id;
-                button.textContent = btn.text;
-                button.style.cssText = `
-                    background: ${btn.color};
-                    color: white;
-                    border: none;
-                    padding: 10px 16px;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-size: 12px;
-                    font-weight: 600;
-                    transition: all 0.2s ease;
-                `;
-                testButtonsContainer.appendChild(button);
-            });
-
-            testingSection.appendChild(testingTitle);
-            testingSection.appendChild(testingDesc);
-            testingSection.appendChild(testButtonsContainer);
 
             // Action buttons
             const actionsContainer = document.createElement('div');
@@ -2426,8 +3091,6 @@
             dialog.appendChild(title);
             dialog.appendChild(optionsContainer);
             dialog.appendChild(graphqlSection);
-            dialog.appendChild(debugSection);
-            dialog.appendChild(testingSection);
             dialog.appendChild(actionsContainer);
 
             backdrop.appendChild(dialog);
@@ -2478,156 +3141,10 @@
                 }
             });
 
-            // Debug button handlers
-            const debugOutputArea = dialog.querySelector('#debug-output');
-            
-            const showDebugOutput = (content) => {
-                debugOutputArea.style.display = 'block';
-                debugOutputArea.textContent = content;
-                debugOutputArea.scrollTop = debugOutputArea.scrollHeight;
-            };
 
-            dialog.querySelector('#debug-status').addEventListener('click', async () => {
-                const status = this.statusTracker.getStatusSummary();
-                const completion = this.statusTracker.getCompletionStatus();
-                
-                const output = `📊 CURRENT SCENE STATUS
-Scene ID: ${status.scene.id || 'Unknown'}
-URL: ${status.scene.url}
-
-📋 SOURCE STATUS:
-StashDB: ${status.sources.stashdb.status} (${status.sources.stashdb.confidence}% confidence)
-  Strategy: ${status.sources.stashdb.strategy || 'None'}
-  Timestamp: ${status.sources.stashdb.timestamp || 'Never'}
-
-ThePornDB: ${status.sources.theporndb.status} (${status.sources.theporndb.confidence}% confidence)
-  Strategy: ${status.sources.theporndb.strategy || 'None'}
-  Timestamp: ${status.sources.theporndb.timestamp || 'Never'}
-
-🗂️ ORGANIZATION:
-Status: ${status.organized.status}
-
-📈 COMPLETION:
-Progress: ${completion.percentage}% (${completion.completedItems}/${completion.totalItems})
-Status: ${completion.status}
-
-Recommendations:
-${completion.recommendations.map(r => `• ${r}`).join('\n')}
-
-🕒 Last Update: ${status.lastUpdate || 'Never'}`;
-                
-                showDebugOutput(output);
-            });
-
-            dialog.querySelector('#debug-sources').addEventListener('click', async () => {
-                const sources = await this.sourceDetector.scanAvailableSources();
-                
-                const output = `🔍 AVAILABLE SCRAPING SOURCES
-
-Found ${sources.length} sources:
-
-${sources.map(source => `
-• ${source.name}
-  Value: ${source.value}
-  Available: ${source.available ? 'Yes' : 'No'}
-  Element: ${source.element.tagName}`).join('')}
-
-${sources.length === 0 ? 'No scraping sources detected on this page.' : ''}`;
-                
-                showDebugOutput(output);
-            });
-
-            dialog.querySelector('#debug-history').addEventListener('click', async () => {
-                const sceneId = this.statusTracker.extractSceneId();
-                const sceneHistory = await this.historyManager.getSceneHistory(sceneId);
-                const stats = await this.historyManager.getStatistics();
-                
-                const currentSceneName = this.statusTracker.extractSceneName();
-                const output = `📚 AUTOMATION HISTORY
-
-Current Scene: ${currentSceneName} (ID: ${sceneId})
-History: ${sceneHistory.length} entries
-
-${sceneHistory.slice(0, 5).map(entry => `
-• ${entry.sceneName || `Scene ${entry.sceneId}`}
-  ${new Date(entry.timestamp).toLocaleString()}
-  Success: ${entry.success ? '✅ Yes' : '❌ No'}
-  Sources: ${entry.sourcesUsed.join(', ') || 'None'}
-  ${entry.errors.length > 0 ? '⚠️ Errors: ' + entry.errors.join(', ') : ''}`).join('')}
-
-📊 GLOBAL STATISTICS:
-Total Automations: ${stats.totalAutomations}
-Success Rate: ${stats.successRate}%
-Unique Scenes: ${stats.uniqueScenes}
-StashDB Uses: ${stats.sourcesUsed.stashdb}
-ThePornDB Uses: ${stats.sourcesUsed.theporndb}
-Total Errors: ${stats.errorsCount}`;
-                
-                showDebugOutput(output);
-            });
-
-            dialog.querySelector('#debug-export').addEventListener('click', async () => {
-                const exportData = await this.historyManager.exportHistory();
-                if (exportData) {
-                    const blob = new Blob([exportData], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `automatestash-history-${new Date().toISOString().split('T')[0]}.json`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    
-                    showDebugOutput('📤 HISTORY EXPORTED\n\nHistory data has been downloaded as JSON file.');
-                } else {
-                    showDebugOutput('❌ EXPORT FAILED\n\nCould not export history data.');
-                }
-            });
-
-            dialog.querySelector('#debug-clear').addEventListener('click', async () => {
-                if (confirm('Clear all automation history? This cannot be undone.')) {
-                    const success = await this.historyManager.clearHistory();
-                    if (success) {
-                        showDebugOutput('🗑️ HISTORY CLEARED\n\nAll automation history has been deleted.');
-                    } else {
-                        showDebugOutput('❌ CLEAR FAILED\n\nCould not clear history data.');
-                    }
-                }
-            });
-
-            // Test button handlers
-            dialog.querySelector('#test-minimize').addEventListener('click', () => {
-                closeDialog();
-                this.testMinimizeFunction();
-            });
-
-            dialog.querySelector('#test-context').addEventListener('click', () => {
-                this.validateContext();
-            });
-
-            dialog.querySelector('#test-buttons').addEventListener('click', () => {
-                console.log('🔍 Debug functionality has been removed for cleaner output');
-            });
-
-            dialog.querySelector('#test-forms').addEventListener('click', () => {
-                console.log('🔍 Debug functionality has been removed for cleaner output');
-            });
-        }
-
-        testMinimizeFunction() {
-            console.log('🧪 Testing minimize functionality...');
-            notifications.show('🧪 Testing minimize/expand cycle...', 'info');
-
-            setTimeout(() => {
-                this.minimize();
-                setTimeout(() => {
-                    this.expand();
-                    notifications.show('✅ Minimize test completed!', 'success');
-                }, 2000);
-            }, 1000);
         }
 
         validateContext() {
-            console.log('🔍 Validating context...');
             const tests = [
                 { name: 'UIManager Instance', test: () => typeof this !== 'undefined' },
                 { name: 'Panel Element', test: () => !!this.panel },
@@ -2637,7 +3154,6 @@ Total Errors: ${stats.errorsCount}`;
 
             tests.forEach(test => {
                 const result = test.test();
-                console.log(`${result ? '✅' : '❌'} ${test.name}: ${result ? 'PASS' : 'FAIL'}`);
             });
 
             notifications.show('🔍 Context validation completed - check console', 'info');
@@ -2655,7 +3171,6 @@ Total Errors: ${stats.errorsCount}`;
             if (this.mutationObserver) {
                 this.mutationObserver.disconnect();
                 this.mutationObserver = null;
-                console.log('👁️ DOM mutation observer disconnected');
             }
             
             this.panel = null;
@@ -2669,7 +3184,6 @@ Total Errors: ${stats.errorsCount}`;
          * Initialize status tracking after panel creation
          */
         async initializeStatusTracking() {
-            console.log('🔄 Initializing enhanced status tracking...');
             
             try {
                 // Set up status update callback
@@ -2678,44 +3192,38 @@ Total Errors: ${stats.errorsCount}`;
                 // Detect current scene status
                 await this.statusTracker.detectCurrentStatus();
                 
-                // Create status summary display
-                this.createStatusSummary();
+                // Update the status summary display with initial data
+                this.updateStatusSummaryDisplay();
                 
                 // Initialize status widget with current scene status
                 await this.initializeStatusWidget();
                 
-                console.log('✅ Status tracking initialized successfully');
             } catch (error) {
-                console.error('❌ Error initializing status tracking:', error);
             }
         }
 
         async initializeStatusWidget() {
             try {
-                console.log('📊 Initializing status display with current scene status...');
                 
                 // Trigger initial status update
                 await this.updateStatusFromDOM();
                 
-                console.log('📊 Status display initialized');
             } catch (error) {
-                console.warn('⚠️ Error initializing status display:', error);
             }
         }
 
         /**
-         * Create and add status summary display to the panel
+         * Create status summary display for the main panel
          */
         createStatusSummary() {
-            if (!this.panel) return;
+            // Only show on scene pages
+            if (!window.location.href.includes('/scenes/') || window.location.href.includes('/scenes/markers')) {
+                return null;
+            }
             
-            // Remove existing status summary if it exists
-            const existing = this.panel.querySelector('#status-summary');
-            if (existing) existing.remove();
-            
-            const statusSummary = document.createElement('div');
-            statusSummary.id = 'status-summary';
-            statusSummary.style.cssText = `
+            const statusContainer = document.createElement('div');
+            statusContainer.id = 'scene-status-summary';
+            statusContainer.style.cssText = `
                 background: rgba(255,255,255,0.1);
                 border-radius: 8px;
                 padding: 12px;
@@ -2723,30 +3231,27 @@ Total Errors: ${stats.errorsCount}`;
                 border: 1px solid rgba(255,255,255,0.2);
             `;
             
-            // Initial status display
-            this.updateStatusSummaryContent(statusSummary);
-            
-            // Insert after header but before content
-            const header = this.panel.querySelector('h3').closest('div');
-            header.parentNode.insertBefore(statusSummary, header.nextSibling);
-            
-            this.statusSummaryElement = statusSummary;
+            // Will be populated by updateStatusDisplay
+            this.statusSummaryContainer = statusContainer;
+            return statusContainer;
         }
-
+        
         /**
-         * Update status summary content
+         * Update the status summary display
          */
-        updateStatusSummaryContent(summaryElement) {
+        updateStatusSummaryDisplay() {
+            if (!this.statusSummaryContainer || !this.statusTracker) return;
+            
             const summary = this.statusTracker.getStatusSummary();
             const completion = this.statusTracker.getCompletionStatus();
             
-            summaryElement.innerHTML = `
+            this.statusSummaryContainer.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <div style="font-weight: 600; font-size: 13px;">${summary.scene.name}</div>
-                    <div style="font-size: 12px; opacity: 0.8;">${completion.status}</div>
+                    <div style="font-size: 12px; opacity: 0.8;">${completion.percentage}% Complete</div>
                 </div>
                 
-                <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <div style="display: flex; gap: 8px;">
                     <div style="flex: 1; background: rgba(255,255,255,0.05); padding: 6px 8px; border-radius: 4px; font-size: 11px;">
                         <div style="display: flex; align-items: center; gap: 4px;">
                             <span>${summary.sources.stashdb.icon}</span>
@@ -2771,10 +3276,6 @@ Total Errors: ${stats.errorsCount}`;
                         <div style="opacity: 0.7; margin-top: 2px;">${summary.organized.status}</div>
                     </div>
                 </div>
-                
-                <div style="background: rgba(255,255,255,0.05); height: 4px; border-radius: 2px; overflow: hidden;">
-                    <div style="background: ${completion.color}; height: 100%; width: ${completion.percentage}%; transition: width 0.3s ease;"></div>
-                </div>
             `;
         }
 
@@ -2782,11 +3283,7 @@ Total Errors: ${stats.errorsCount}`;
          * Callback for status updates
          */
         updateStatusDisplay(statusSummary) {
-            console.log('🔄 Updating status display:', statusSummary);
-            
-            if (this.statusSummaryElement) {
-                this.updateStatusSummaryContent(this.statusSummaryElement);
-            }
+            this.updateStatusSummaryDisplay();
         }
 
         /**
@@ -2795,7 +3292,6 @@ Total Errors: ${stats.errorsCount}`;
         async saveAutomationResult(result) {
             const sceneId = this.statusTracker.extractSceneId();
             if (!sceneId) {
-                console.warn('⚠️ Cannot save automation history: no scene ID found');
                 return;
             }
 
@@ -2806,29 +3302,49 @@ Total Errors: ${stats.errorsCount}`;
                     sceneName: sceneName,
                     url: window.location.href
                 });
-                console.log('✅ Automation history saved');
             } catch (error) {
-                console.error('❌ Failed to save automation history:', error);
             }
         }
 
         // ===== AUTOMATION ENGINE =====
         async startAutomation() {
-            console.log('🚀 Starting automation...');
             this.updateSceneStatus('🚀 Starting automation...');
+            
+            // Start tracking automation for summary
+            const sceneName = this.statusTracker.extractSceneName() || 'Unknown Scene';
+            const sceneId = this.statusTracker.extractSceneId() || '';
+            this.summaryWidget.startTracking(sceneName, sceneId);
+            
+            // Reset and set automation state
+            this.automationCancelled = false;
+            this.automationInProgress = true;
+            
+            // Check if we're in re-scrape mode
+            this.rescrapeOptions.forceRescrape = this.rescrapeOptions.rescrapeStashDB || this.rescrapeOptions.rescrapeThePornDB;
+            
+            // Show cancel button
+            this.showCancelButton();
 
             try {
                 // Check what's already scraped
                 let alreadyScraped = { stashdb: false, theporndb: false };
-                if (getConfig(CONFIG.SKIP_ALREADY_SCRAPED)) {
+                if (getConfig(CONFIG.SKIP_ALREADY_SCRAPED) && !this.rescrapeOptions.forceRescrape) {
                     alreadyScraped = await this.checkAlreadyScraped();
-                    console.log('📋 Already scraped status:', alreadyScraped);
                 }
 
-                const needsStashDB = getConfig(CONFIG.AUTO_SCRAPE_STASHDB) && !alreadyScraped.stashdb;
-                const needsThePornDB = getConfig(CONFIG.AUTO_SCRAPE_THEPORNDB) && !alreadyScraped.theporndb;
+                // Handle re-scrape options
+                let needsStashDB, needsThePornDB;
+                if (this.rescrapeOptions.forceRescrape) {
+                    // Force re-scrape based on checkbox selections
+                    needsStashDB = this.rescrapeOptions.rescrapeStashDB;
+                    needsThePornDB = this.rescrapeOptions.rescrapeThePornDB;
+                    this.updateSceneStatus('🔄 Force re-scraping selected sources...');
+                } else {
+                    // Normal scraping logic
+                    needsStashDB = getConfig(CONFIG.AUTO_SCRAPE_STASHDB) && !alreadyScraped.stashdb;
+                    needsThePornDB = getConfig(CONFIG.AUTO_SCRAPE_THEPORNDB) && !alreadyScraped.theporndb;
+                }
 
-                console.log(`📋 Scraping plan: StashDB=${needsStashDB}, ThePornDB=${needsThePornDB}`);
 
                 if (!needsStashDB && !needsThePornDB) {
                     this.updateSceneStatus('✅ All sources already scraped, organizing...');
@@ -2837,53 +3353,125 @@ Total Errors: ${stats.errorsCount}`;
                 }
 
                 // Run automation steps
+                let stashDBResult = 'skip';
+                let thePornDBResult = 'skip';
+
                 if (needsStashDB) {
+                    // Check for cancellation before scraping
+                    if (this.automationCancelled) {
+                        this.updateSceneStatus('⚠️ Automation cancelled');
+                        this.summaryWidget.addAction('StashDB Scraping', 'cancelled');
+                        return;
+                    }
+                    
+                    this.summaryWidget.addSource('StashDB');
                     await this.scrapeStashDB();
+                    this.summaryWidget.addAction('Scraped StashDB', 'success');
+                    
+                    // Check for cancellation after scraping
+                    if (this.automationCancelled) {
+                        this.updateSceneStatus('⚠️ Automation cancelled');
+                        return;
+                    }
+                    
                     if (getConfig(CONFIG.AUTO_CREATE_PERFORMERS)) {
                         await this.createNewPerformers();
+                        this.summaryWidget.addAction('Created new performers/tags', 'success');
+                        
+                        // Check for cancellation after creating performers
+                        if (this.automationCancelled) {
+                            this.updateSceneStatus('⚠️ Automation cancelled');
+                            return;
+                        }
                     }
-                    await this.applyScrapedData();
+                    
+                    stashDBResult = await this.applyScrapedData();
+                    if (stashDBResult === 'cancel') {
+                        // User cancelled entire automation
+                        this.updateSceneStatus('⚠️ Automation cancelled by user');
+                        return;
+                    } else if (stashDBResult === 'skip') {
+                    }
                 }
 
                 if (needsThePornDB) {
+                    // Check for cancellation before scraping
+                    if (this.automationCancelled) {
+                        this.updateSceneStatus('⚠️ Automation cancelled');
+                        this.summaryWidget.addAction('ThePornDB Scraping', 'cancelled');
+                        return;
+                    }
+                    
+                    this.summaryWidget.addSource('ThePornDB');
                     await this.scrapeThePornDB();
+                    this.summaryWidget.addAction('Scraped ThePornDB', 'success');
+                    
+                    // Check for cancellation after scraping
+                    if (this.automationCancelled) {
+                        this.updateSceneStatus('⚠️ Automation cancelled');
+                        return;
+                    }
+                    
                     if (getConfig(CONFIG.AUTO_CREATE_PERFORMERS)) {
                         await this.createNewPerformers();
+                        this.summaryWidget.addAction('Created new performers/tags', 'success');
+                        
+                        // Check for cancellation after creating performers
+                        if (this.automationCancelled) {
+                            this.updateSceneStatus('⚠️ Automation cancelled');
+                            return;
+                        }
                     }
-                    await this.applyScrapedData();
+                    
+                    thePornDBResult = await this.applyScrapedData();
+                    if (thePornDBResult === 'cancel') {
+                        // User cancelled entire automation
+                        this.updateSceneStatus('⚠️ Automation cancelled by user');
+                        return;
+                    } else if (thePornDBResult === 'skip') {
+                    }
                 }
 
+                // Check for cancellation before saving
+                if (this.automationCancelled) {
+                    this.updateSceneStatus('⚠️ Automation cancelled');
+                    return;
+                }
+                
                 // Save scraped data first
                 await this.saveScene();
+                
+                // Check for cancellation after saving
+                if (this.automationCancelled) {
+                    this.updateSceneStatus('⚠️ Automation cancelled');
+                    return;
+                }
 
                 // Check organize status before attempting organization
                 if (getConfig(CONFIG.AUTO_ORGANIZE)) {
                     // Check current organized status first
                     const isCurrentlyOrganized = await this.checkOrganizedStatus();
-                    console.log(`📊 Current organized status: ${isCurrentlyOrganized}`);
                     
                     if (isCurrentlyOrganized) {
-                        console.log('✅ Scene is already organized, skipping organization step');
                         this.updateSceneStatus('✅ Already organized');
+                        this.summaryWidget.addAction('Mark as organized', 'skip', 'Already organized');
                     } else {
                         const hasStashDB = alreadyScraped.stashdb || needsStashDB;
                         const hasThePornDB = alreadyScraped.theporndb || needsThePornDB;
 
-                        console.log(`📋 Final scraping status - StashDB: ${hasStashDB}, ThePornDB: ${hasThePornDB}`);
 
                         if (hasStashDB && hasThePornDB) {
-                            console.log('✅ Both sources available, proceeding with organization');
                             
                             // Organize the scene
                             await this.organizeScene();
+                            this.summaryWidget.addAction('Marked as organized', 'success');
                             
                             // Save again after organizing
                             await this.saveScene();
+                            this.summaryWidget.addAction('Saved scene', 'success');
                         } else if (hasStashDB || hasThePornDB) {
-                            console.log('⚠️ Only one source available, skipping organization');
                             this.updateSceneStatus('⚠️ Skipping organization - need both sources');
                         } else {
-                            console.log('❌ No sources available, skipping organization');
                             this.updateSceneStatus('❌ No sources found');
                         }
                     }
@@ -2896,12 +3484,16 @@ Total Errors: ${stats.errorsCount}`;
                 await this.saveAutomationResult({
                     success: true,
                     sourcesUsed: [
-                        ...(needsStashDB ? ['stashdb'] : []),
-                        ...(needsThePornDB ? ['theporndb'] : [])
+                        ...(stashDBResult === 'apply' ? ['stashdb'] : []),
+                        ...(thePornDBResult === 'apply' ? ['theporndb'] : [])
                     ],
-                    stashdb: alreadyScraped.stashdb || needsStashDB,
-                    theporndb: alreadyScraped.theporndb || needsThePornDB,
-                    organized: getConfig(CONFIG.AUTO_ORGANIZE)
+                    stashdb: alreadyScraped.stashdb || stashDBResult === 'apply',
+                    theporndb: alreadyScraped.theporndb || thePornDBResult === 'apply',
+                    organized: getConfig(CONFIG.AUTO_ORGANIZE),
+                    skippedSources: [
+                        ...(stashDBResult === 'skip' && needsStashDB ? ['stashdb'] : []),
+                        ...(thePornDBResult === 'skip' && needsThePornDB ? ['theporndb'] : [])
+                    ]
                 });
 
                 // Update status tracking
@@ -2918,21 +3510,18 @@ Total Errors: ${stats.errorsCount}`;
                     // Clear GraphQL cache to ensure fresh data
                     if (this.sourceDetector && this.sourceDetector.cache) {
                         this.sourceDetector.cache.clear();
-                        console.log('🔄 Cleared GraphQL cache after automation');
                     }
                     
                     await this.updateStatusFromDOM();
-                    // Update status summary widget
-                    if (this.statusSummaryElement) {
-                        this.updateStatusSummaryContent(this.statusSummaryElement);
-                    }
                     notifications.show('✅ Automation complete!', 'success');
                 }, 4000);
 
             } catch (error) {
-                console.error('❌ Automation error:', error);
                 this.updateSceneStatus('❌ Automation failed');
                 notifications.show('❌ Automation failed: ' + error.message, 'error');
+                
+                // Track error in summary widget
+                this.summaryWidget.addError(error.message);
 
                 // Save failed automation history
                 await this.saveAutomationResult({
@@ -2946,11 +3535,130 @@ Total Errors: ${stats.errorsCount}`;
                     success: false,
                     errors: [error.message]
                 });
+            } finally {
+                // Always cleanup automation state
+                this.automationInProgress = false;
+                this.hideCancelButton();
+                
+                // Finish tracking and show summary
+                if (this.summaryWidget) {
+                    const success = !this.automationCancelled && !this.summaryWidget.summaryData.errors.length;
+                    this.summaryWidget.finishTracking(success);
+                    
+                    // Show summary dialog after ALL other UI updates are complete (after 5 seconds)
+                    // This ensures the status update at 4000ms doesn't interfere
+                    setTimeout(() => {
+                        this.summaryWidget.showSummary();
+                    }, 5000);
+                }
+                
+                // Reset re-scrape options
+                this.rescrapeOptions = {
+                    forceRescrape: false,
+                    rescrapeStashDB: false,
+                    rescrapeThePornDB: false
+                };
+                
+                // Uncheck re-scrape checkboxes if they exist
+                const stashCheckbox = document.querySelector('#rescrape-stashdb');
+                const pornCheckbox = document.querySelector('#rescrape-theporndb');
+                if (stashCheckbox) stashCheckbox.checked = false;
+                if (pornCheckbox) pornCheckbox.checked = false;
+                
+                // Reset start button if it exists
+                if (this.startButton) {
+                    this.startButton.disabled = false;
+                    this.startButton.textContent = '🚀 Start Automation';
+                    this.startButton.style.background = '#27ae60';
+                    this.startButton.style.cursor = 'pointer';
+                }
+            }
+        }
+        
+        showCancelButton() {
+            // Remove any existing cancel button
+            this.hideCancelButton();
+            
+            // Create cancel button overlay
+            this.cancelButton = document.createElement('div');
+            this.cancelButton.id = 'automation-cancel-overlay';
+            this.cancelButton.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                z-index: 10003;
+                background: linear-gradient(135deg, #ff4444, #cc0000);
+                color: white;
+                padding: 12px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 20px rgba(255, 0, 0, 0.3);
+                cursor: pointer;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 14px;
+                font-weight: bold;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                transition: all 0.3s ease;
+                animation: slideIn 0.3s ease;
+            `;
+            
+            this.cancelButton.innerHTML = `
+                <span style="font-size: 18px;">🛑</span>
+                <span>Cancel Automation</span>
+            `;
+            
+            // Add hover effect
+            this.cancelButton.onmouseenter = () => {
+                this.cancelButton.style.background = 'linear-gradient(135deg, #ff6666, #dd0000)';
+                this.cancelButton.style.transform = 'scale(1.05)';
+            };
+            
+            this.cancelButton.onmouseleave = () => {
+                this.cancelButton.style.background = 'linear-gradient(135deg, #ff4444, #cc0000)';
+                this.cancelButton.style.transform = 'scale(1)';
+            };
+            
+            // Handle cancel click
+            this.cancelButton.onclick = () => {
+                if (confirm('Are you sure you want to cancel the automation?')) {
+                    this.automationCancelled = true;
+                    this.summaryWidget.addWarning('Automation cancelled by user');
+                    this.updateSceneStatus('🛑 Cancelling automation...');
+                    notifications.show('🛑 Automation cancelled by user', 'warning');
+                }
+            };
+            
+            // Add animation keyframes
+            if (!document.querySelector('#cancel-button-animations')) {
+                const style = document.createElement('style');
+                style.id = 'cancel-button-animations';
+                style.textContent = `
+                    @keyframes slideIn {
+                        from {
+                            opacity: 0;
+                            transform: translateX(100%);
+                        }
+                        to {
+                            opacity: 1;
+                            transform: translateX(0);
+                        }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            document.body.appendChild(this.cancelButton);
+        }
+        
+        hideCancelButton() {
+            if (this.cancelButton) {
+                this.cancelButton.remove();
+                this.cancelButton = null;
             }
         }
 
         async checkAlreadyScraped() {
-            console.log('🔍 Checking already scraped sources...');
             this.updateSceneStatus('🔍 Checking already scraped sources...');
 
             const result = { stashdb: false, theporndb: false };
@@ -2960,14 +3668,12 @@ Total Errors: ${stats.errorsCount}`;
 
                 // Enhanced GraphQL-powered detection (highest confidence)
                 if (getConfig(CONFIG.ENABLE_CROSS_SCENE_INTELLIGENCE)) {
-                    console.log('🧠 Using GraphQL cross-scene intelligence...');
                     
                     try {
                         // Check StashDB via GraphQL
                         const stashdbStatus = await this.sourceDetector.detectStashDBData();
                         if (stashdbStatus.found && stashdbStatus.confidence >= 100) {
                             result.stashdb = true;
-                            console.log(`✅ StashDB data detected via GraphQL (${stashdbStatus.confidence}% confidence)`);
                             this.updateSceneStatus('✅ Source detected');
                         }
 
@@ -2975,23 +3681,19 @@ Total Errors: ${stats.errorsCount}`;
                         const theporndbStatus = await this.sourceDetector.detectThePornDBData();
                         if (theporndbStatus.found && theporndbStatus.confidence >= 100) {
                             result.theporndb = true;
-                            console.log(`✅ ThePornDB data detected via GraphQL (${theporndbStatus.confidence}% confidence)`);
                             this.updateSceneStatus('✅ Source detected');
                         }
 
                         // If GraphQL detection found sources, return early
                         if (result.stashdb || result.theporndb) {
-                            console.log('📊 GraphQL detection complete, skipping DOM fallback');
                             return result;
                         }
                     } catch (graphqlError) {
-                        console.warn('⚠️ GraphQL detection failed, falling back to DOM:', graphqlError.message);
                         this.updateSceneStatus('⚠️ GraphQL failed, using DOM fallback...');
                     }
                 }
 
                 // Fallback to DOM-based detection (original method)
-                console.log('🔍 Using DOM-based source detection...');
                 
                 // Check for StashDB indicators
                 const stashdbSelectors = [
@@ -3005,7 +3707,6 @@ Total Errors: ${stats.errorsCount}`;
                     for (const element of elements) {
                         if (element && element.value && element.value.trim()) {
                             result.stashdb = true;
-                            console.log('✅ StashDB data detected via DOM');
                             break;
                         }
                     }
@@ -3024,7 +3725,6 @@ Total Errors: ${stats.errorsCount}`;
                     for (const element of elements) {
                         if (element && element.value && element.value.trim()) {
                             result.theporndb = true;
-                            console.log('✅ ThePornDB data detected via DOM');
                             break;
                         }
                     }
@@ -3032,16 +3732,18 @@ Total Errors: ${stats.errorsCount}`;
                 }
 
             } catch (error) {
-                console.error('❌ Error checking scraped sources:', error);
             }
 
-            console.log('📋 Check complete - StashDB:', result.stashdb, 'ThePornDB:', result.theporndb);
             return result;
         }
 
         async scrapeStashDB() {
-            console.log('🔍 Scraping StashDB...');
             this.updateSceneStatus('🔍 Scraping...');
+            
+            // Check for cancellation
+            if (this.automationCancelled) {
+                throw new Error('Automation cancelled');
+            }
 
             const scrapeBtn = this.findScrapeButton();
             if (!scrapeBtn) {
@@ -3049,26 +3751,37 @@ Total Errors: ${stats.errorsCount}`;
             }
 
             scrapeBtn.click();
-            await this.wait(1000);
+            await this.wait(1000).catch(err => {
+                if (err.message === 'Automation cancelled') throw err;
+            });
+            
+            // Check for cancellation again
+            if (this.automationCancelled) {
+                throw new Error('Automation cancelled');
+            }
 
             // Look for StashDB option
             const options = document.querySelectorAll('.dropdown-menu .dropdown-item, a.dropdown-item');
             for (const option of options) {
                 if (option.textContent.toLowerCase().includes('stashdb') ||
                     option.textContent.toLowerCase().includes('stash-box')) {
-                    console.log('✅ Found StashDB option');
                     option.click();
-                    await this.wait(3000);
+                    await this.wait(3000).catch(err => {
+                        if (err.message === 'Automation cancelled') throw err;
+                    });
                     return;
                 }
             }
 
-            console.log('⚠️ No StashDB option found');
         }
 
         async scrapeThePornDB() {
-            console.log('🔍 Scraping ThePornDB...');
             this.updateSceneStatus('🔍 Scraping...');
+            
+            // Check for cancellation
+            if (this.automationCancelled) {
+                throw new Error('Automation cancelled');
+            }
 
             const scrapeBtn = this.findScrapeButton();
             if (!scrapeBtn) {
@@ -3076,59 +3789,891 @@ Total Errors: ${stats.errorsCount}`;
             }
 
             scrapeBtn.click();
-            await this.wait(1000);
+            await this.wait(1000).catch(err => {
+                if (err.message === 'Automation cancelled') throw err;
+            });
+            
+            // Check for cancellation again
+            if (this.automationCancelled) {
+                throw new Error('Automation cancelled');
+            }
 
             // Look for ThePornDB option
             const options = document.querySelectorAll('.dropdown-menu .dropdown-item, a.dropdown-item');
             for (const option of options) {
                 if (option.textContent.toLowerCase().includes('theporndb') ||
                     option.textContent.toLowerCase().includes('tpdb')) {
-                    console.log('✅ Found ThePornDB option');
                     option.click();
-                    await this.wait(3000);
+                    await this.wait(3000).catch(err => {
+                        if (err.message === 'Automation cancelled') throw err;
+                    });
                     return;
                 }
             }
 
-            console.log('⚠️ No ThePornDB option found');
         }
 
         findScrapeButton() {
-            console.log('🔍 Looking for scrape button...');
 
             const buttons = document.querySelectorAll('button');
             for (const button of buttons) {
                 if (button.textContent.toLowerCase().includes('scrape')) {
-                    console.log('✅ Found scrape button:', button.textContent.trim());
                     return button;
                 }
             }
 
-            console.log('❌ No scrape button found');
             return null;
         }
 
+        
+        async collectScrapedData() {
+            const scrapedData = {
+                title: null,
+                performers: [],
+                studio: null,
+                tags: [],
+                date: null,
+                details: null,
+                url: null,
+                studioCode: null,
+                group: null,
+                thumbnail: null
+            };
+
+            try {
+                // Wait a bit for the scraper results to fully render
+                await this.wait(1000);
+                
+                // IMPORTANT: After scraping, Stash shows a comparison modal with TWO columns:
+                // LEFT column: Current/existing data (old)
+                // RIGHT column: Newly scraped data (NEW - what we want!)
+                
+                let scrapedColumn = null;
+                
+                // First, try to find the scraper modal OR the edit form
+                // After scraping, Stash may show the edit form directly rather than a modal
+                const scraperModal = document.querySelector('.modal.show .modal-dialog, .modal-dialog.scrape-dialog, .ModalContainer .modal-dialog');
+                const editForm = document.querySelector('.entity-edit-panel, .scene-edit-details, .edit-panel, form[class*="edit"]');
+                
+                if (scraperModal) {
+                    
+                    const modalBody = scraperModal.querySelector('.modal-body');
+                    if (modalBody) {
+                    }
+                    
+                    // Strategy 1: Look for the "Scraped" label in the header row
+                    const headerLabels = modalBody ? modalBody.querySelectorAll('label.form-label') : [];
+                    let scrapedColumnIndex = -1;
+                    headerLabels.forEach((label, idx) => {
+                        if (label.textContent.trim().toLowerCase() === 'scraped') {
+                            // This is the scraped header - it's in position 1 (second column)
+                            scrapedColumnIndex = 1;
+                        }
+                    });
+                    
+                    // Strategy 2: Collect all the right-side (scraped) col-6 divs
+                    if (scrapedColumnIndex === 1 && modalBody) {
+                        // We know the structure: each row has col-lg-9 containing a row with two col-6
+                        // The second col-6 in each row is the scraped data
+                        const allRows = modalBody.querySelectorAll('.row');
+                        const scrapedFields = [];
+                        
+                        allRows.forEach(row => {
+                            // Skip the header row
+                            if (row.querySelector('label.col-6')) return;
+                            
+                            // Find the col-lg-9 that contains the data columns
+                            const dataContainer = row.querySelector('.col-lg-9');
+                            if (dataContainer) {
+                                const innerRow = dataContainer.querySelector('.row');
+                                if (innerRow) {
+                                    const columns = innerRow.querySelectorAll('.col-6');
+                                    if (columns.length === 2) {
+                                        // The second column (index 1) is the scraped data
+                                        scrapedFields.push(columns[1]);
+                                    }
+                                }
+                            }
+                        });
+                        
+                        if (scrapedFields.length > 0) {
+                            // Create a virtual container for all scraped fields
+                            scrapedColumn = document.createElement('div');
+                            scrapedColumn.id = 'scraped-data-virtual-container';
+                            scrapedFields.forEach(field => {
+                                // Clone the elements to avoid modifying the DOM
+                                scrapedColumn.appendChild(field.cloneNode(true));
+                            });
+                        }
+                    }
+                    
+                    // Strategy 3: Look for column with checkmarks next to fields (fallback)
+                    if (!scrapedColumn) {
+                        const row = scraperModal.querySelector('.row');
+                        if (row) {
+                            const columns = row.querySelectorAll('.col, .col-6, .col-md-6, .col-lg-6, [class*="col-"]');
+                            
+                            // Check each column for checkmarks
+                            let maxCheckmarks = 0;
+                            let checkmarkColumn = null;
+                            
+                            columns.forEach((col, idx) => {
+                                // Look for various types of checkmarks
+                                const checkmarks = col.querySelectorAll('.fa-check, .fa-check-circle, .fa-check-square, .bi-check, .bi-check-circle, [class*="check"]:not(input), svg[class*="check"], input[type="checkbox"]:checked, span:has(svg), .text-success');
+                                const inputs = col.querySelectorAll('input[type="text"], input[type="date"], textarea, select');
+                                
+                                
+                                // The column with the most checkmarks AND has input fields is likely the scraped data
+                                if (checkmarks.length > maxCheckmarks && inputs.length > 0) {
+                                    maxCheckmarks = checkmarks.length;
+                                    checkmarkColumn = col;
+                                }
+                            });
+                            
+                            if (checkmarkColumn) {
+                                scrapedColumn = checkmarkColumn;
+                            }
+                            
+                            // Strategy 3: Look for the column that is NOT disabled/readonly
+                            if (!scrapedColumn && columns.length >= 2) {
+                                // The scraped data column typically has editable fields
+                                // while the existing data column has readonly/disabled fields
+                                for (let i = columns.length - 1; i >= 0; i--) {
+                                    const inputs = columns[i].querySelectorAll('input, textarea, select');
+                                    const editableInputs = Array.from(inputs).filter(input => 
+                                        !input.disabled && 
+                                        !input.readOnly && 
+                                        input.type !== 'hidden'
+                                    );
+                                    
+                                    if (editableInputs.length > 0) {
+                                        scrapedColumn = columns[i];
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            // Strategy 4: If still no column, use rightmost with actual data
+                            if (!scrapedColumn && columns.length >= 2) {
+                                // Check from right to left for column with actual data
+                                for (let i = columns.length - 1; i >= 0; i--) {
+                                    const inputs = columns[i].querySelectorAll('input[type="text"], input[type="date"], textarea');
+                                    const hasValues = Array.from(inputs).some(input => input.value && input.value.trim() !== '');
+                                    
+                                    if (hasValues) {
+                                        scrapedColumn = columns[i];
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            // Final fallback: if we have multiple columns, never use the first one (that's old data)
+                            if (!scrapedColumn && columns.length >= 2) {
+                                scrapedColumn = columns[columns.length - 1];
+                            } else if (!scrapedColumn && columns.length === 1) {
+                                scrapedColumn = columns[0];
+                            }
+                        }
+                    }
+                } else if (editForm) {
+                    // No modal found, but we have an edit form - the data is already applied
+                    scrapedColumn = editForm;
+                }
+                
+                // If no clear columns found, look for form containers
+                if (!scrapedColumn && scraperModal) {
+                    const forms = scraperModal.querySelectorAll('form, .form-container');
+                    if (forms.length >= 2) {
+                        // Use the second form (new data)
+                        scrapedColumn = forms[1];
+                    } else if (forms.length === 1) {
+                        scrapedColumn = forms[0];
+                    }
+                }
+                
+                // Last resort - use the whole modal or edit form
+                if (!scrapedColumn) {
+                    if (scraperModal) {
+                        scrapedColumn = scraperModal;
+                    } else if (editForm) {
+                        scrapedColumn = editForm;
+                    } else {
+                        // No modal or form found - fall back to document
+                        scrapedColumn = document;
+                    }
+                }
+                
+                // Now collect data from the scraped column
+                
+                // Enhanced collection strategy - look in the scraped column first, then fallback to document
+                const searchScope = scrapedColumn || document;
+                
+                // Title - look for input with Title placeholder or by label
+                // Try multiple strategies to find the title
+                let titleInput = searchScope.querySelector('input[placeholder="Title"]');
+                if (!titleInput) {
+                    // Try finding by label
+                    const labels = Array.from(searchScope.querySelectorAll('label'));
+                    const titleLabel = labels.find(l => l.textContent.trim() === 'Title');
+                    if (titleLabel) {
+                        // Find the input in the same form-group
+                        const formGroup = titleLabel.closest('.form-group, .form-control-group, div');
+                        if (formGroup) {
+                            titleInput = formGroup.querySelector('input[type="text"], input:not([type])');
+                        }
+                    }
+                }
+                if (!titleInput) {
+                    // Try by name attribute
+                    titleInput = searchScope.querySelector('input[name="title"], input[name="Title"], input[id*="title"]');
+                }
+                if (!titleInput) {
+                    // Last resort - find any text input with a title-like value
+                    const allInputs = searchScope.querySelectorAll('input[type="text"], input:not([type])');
+                    titleInput = Array.from(allInputs).find(input => 
+                        input.placeholder === 'Title' || 
+                        (input.value && input.value.length > 10 && !input.placeholder?.includes('URL') && !input.placeholder?.includes('Code') && !input.placeholder?.includes('Date'))
+                    );
+                }
+                if (titleInput && titleInput.value) {
+                    scrapedData.title = titleInput.value;
+                }
+                
+                // URL - look for input with URLs placeholder
+                let urlInput = searchScope.querySelector('input[placeholder="URLs"], input[placeholder="URL"]');
+                if (!urlInput) {
+                    // Try finding by label
+                    const urlLabel = Array.from(searchScope.querySelectorAll('label')).find(l => 
+                        l.textContent.trim() === 'URLs' || l.textContent.trim() === 'URL'
+                    );
+                    if (urlLabel) {
+                        const formGroup = urlLabel.closest('.form-group, .form-control-group, div');
+                        if (formGroup) {
+                            urlInput = formGroup.querySelector('input');
+                        }
+                    }
+                }
+                if (!urlInput) {
+                    // Try by name/id attributes
+                    urlInput = searchScope.querySelector('input[name*="url" i], input[id*="url" i]');
+                }
+                if (urlInput && urlInput.value) {
+                    scrapedData.url = urlInput.value;
+                }
+                
+                // Date
+                const dateInput = searchScope.querySelector('input[type="date"], input[placeholder*="YYYY-MM-DD"], input[name*="date" i]');
+                if (dateInput && dateInput.value) {
+                    scrapedData.date = dateInput.value;
+                }
+                
+                // Studio Code
+                const studioCodeInput = searchScope.querySelector('input[placeholder="Studio Code"], input[name*="code" i]');
+                if (studioCodeInput && studioCodeInput.value) {
+                    scrapedData.studioCode = studioCodeInput.value;
+                }
+                
+                // Details - look for textarea
+                let detailsTextarea = searchScope.querySelector('textarea[placeholder="Details"], textarea[placeholder="Description"]');
+                if (!detailsTextarea) {
+                    // Try finding by label
+                    const detailsLabel = Array.from(searchScope.querySelectorAll('label')).find(l => 
+                        l.textContent.trim() === 'Details' || l.textContent.trim() === 'Description'
+                    );
+                    if (detailsLabel) {
+                        const formGroup = detailsLabel.closest('.form-group, .form-control-group, div');
+                        if (formGroup) {
+                            detailsTextarea = formGroup.querySelector('textarea');
+                        }
+                    }
+                }
+                if (!detailsTextarea) {
+                    // Try by name/id attributes
+                    detailsTextarea = searchScope.querySelector('textarea[name*="details" i], textarea[name*="description" i], textarea[id*="details" i], textarea[id*="description" i]');
+                }
+                if (detailsTextarea && detailsTextarea.value) {
+                    scrapedData.details = detailsTextarea.value;
+                }
+                
+                // Group/Movie - look for these specific fields
+                const groupSelects = searchScope.querySelectorAll('.react-select__value-container');
+                groupSelects.forEach(container => {
+                    const label = container.closest('.form-group')?.querySelector('label');
+                    if (label && (label.textContent.toLowerCase().includes('group') || label.textContent.toLowerCase().includes('movie'))) {
+                        const value = container.querySelector('.react-select__single-value');
+                        if (value && value.textContent) {
+                            scrapedData.group = value.textContent.trim();
+                        }
+                    }
+                });
+                
+                // Thumbnail - look for scene cover image
+                const thumbnailImg = searchScope.querySelector('.scene-cover img, .SceneCover img, img[alt*="scene" i], img[alt*="cover" i]');
+                if (thumbnailImg) {
+                    scrapedData.thumbnail = thumbnailImg.src || thumbnailImg.getAttribute('data-src');
+                }
+
+                // Performers - look for performer select components
+                // Find by label first
+                const labels = Array.from(searchScope.querySelectorAll('label'));
+                const performerLabel = labels.find(l => 
+                    l.textContent.trim() === 'Performers' || l.textContent.trim() === 'Performer(s)'
+                );
+                if (performerLabel) {
+                    const formGroup = performerLabel.closest('.form-group, .form-control-group, div');
+                    if (formGroup) {
+                        const performerSelect = formGroup.querySelector('.react-select');
+                        if (performerSelect) {
+                            const performerValues = performerSelect.querySelectorAll('.react-select__multi-value__label');
+                            performerValues.forEach(el => {
+                                const text = el.textContent?.trim();
+                                if (text && !text.includes('×') && !scrapedData.performers.includes(text)) {
+                                    scrapedData.performers.push(text);
+                                }
+                            });
+                        }
+                    }
+                }
+                
+                // If we didn't find performers by label, look for multi-select with performer-like values
+                if (scrapedData.performers.length === 0) {
+                    // Find multi-selects that have name-like values (not tags)
+                    const multiSelects = searchScope.querySelectorAll('.react-select__value-container--is-multi');
+                    multiSelects.forEach(container => {
+                        const values = container.querySelectorAll('.react-select__multi-value__label');
+                        const valueTexts = Array.from(values).map(v => v.textContent?.trim()).filter(t => t);
+                        // If values look like names (short, capitalized), they're likely performers
+                        if (valueTexts.length > 0 && valueTexts.every(t => t.length < 30 && /^[A-Z]/.test(t))) {
+                            valueTexts.forEach(text => {
+                                if (!scrapedData.performers.includes(text) && !text.includes('×')) {
+                                    scrapedData.performers.push(text);
+                                }
+                            });
+                            return; // Stop after finding the first performer-like multi-select
+                        }
+                    });
+                }
+                
+                if (scrapedData.performers.length > 0) {
+                }
+
+                // Studio - look for React Select single value
+                const studioLabel = Array.from(searchScope.querySelectorAll('label')).find(l => 
+                    l.textContent.trim() === 'Studio'
+                );
+                if (studioLabel) {
+                    const studioSelect = studioLabel.parentElement.querySelector('.react-select');
+                    if (studioSelect) {
+                        const studioValue = studioSelect.querySelector('.react-select__single-value');
+                        if (studioValue && studioValue.textContent) {
+                            scrapedData.studio = studioValue.textContent.trim();
+                        }
+                    }
+                }
+                
+                // If not found by label, try by class
+                if (!scrapedData.studio) {
+                    const studioSelects = searchScope.querySelectorAll('.react-select.studio-select, [class*="studio"] .react-select');
+                    studioSelects.forEach(select => {
+                        const studioValue = select.querySelector('.react-select__single-value');
+                        if (studioValue && studioValue.textContent && !scrapedData.studio) {
+                            scrapedData.studio = studioValue.textContent.trim();
+                        }
+                    });
+                }
+
+                // Tags - look for tag select components
+                const tagLabel = Array.from(searchScope.querySelectorAll('label')).find(l => 
+                    l.textContent.trim() === 'Tags' || l.textContent.trim() === 'Tag(s)'
+                );
+                if (tagLabel) {
+                    const tagSelect = tagLabel.parentElement.querySelector('.react-select');
+                    if (tagSelect) {
+                        const tagValues = tagSelect.querySelectorAll('.react-select__multi-value__label');
+                        tagValues.forEach(el => {
+                            const text = el.textContent?.trim();
+                            if (text && !text.includes('×') && !scrapedData.tags.includes(text)) {
+                                scrapedData.tags.push(text);
+                            }
+                        });
+                    }
+                }
+                
+                // If not found by label, try by class
+                if (scrapedData.tags.length === 0) {
+                    const tagSelects = searchScope.querySelectorAll('.react-select.tag-select, [class*="tag"] .react-select');
+                    tagSelects.forEach(select => {
+                        const tagValues = select.querySelectorAll('.react-select__multi-value__label');
+                        tagValues.forEach(el => {
+                            const text = el.textContent?.trim();
+                            // Make sure it's not already in performers and not a duplicate
+                            if (text && !text.includes('×') && !scrapedData.performers.includes(text) && !scrapedData.tags.includes(text)) {
+                                scrapedData.tags.push(text);
+                            }
+                        });
+                    });
+                }
+                
+                if (scrapedData.tags.length > 0) {
+                }
+
+                if (!scrapedData.title && !scrapedData.studio && scrapedData.performers.length === 0) {
+                    
+                    // Fallback: Try to collect from ALL visible inputs in the document
+                    const allVisibleInputs = Array.from(document.querySelectorAll('input[type="text"]:not([type="hidden"]), input[type="date"]:not([type="hidden"]), textarea')).filter(i => i.offsetParent !== null);
+                    
+                    allVisibleInputs.forEach(input => {
+                        if (input.value) {
+                            // Try to identify the field by label
+                            const formGroup = input.closest('.form-group, .form-control-group, [class*="form"]');
+                            const label = formGroup?.querySelector('label')?.textContent?.trim() || '';
+                            
+                            if ((label === 'Title' || input.placeholder === 'Title') && !scrapedData.title) {
+                                scrapedData.title = input.value;
+                            } else if ((label === 'URLs' || label === 'URL' || input.placeholder === 'URLs') && !scrapedData.url) {
+                                scrapedData.url = input.value;
+                            } else if ((label === 'Studio Code' || input.placeholder === 'Studio Code') && !scrapedData.studioCode) {
+                                scrapedData.studioCode = input.value;
+                            } else if ((label === 'Details' || label === 'Description') && !scrapedData.details) {
+                                scrapedData.details = input.value;
+                            }
+                        }
+                    });
+                    
+                    // Fallback for React Select components
+                    document.querySelectorAll('.react-select__value-container').forEach(container => {
+                        const formGroup = container.closest('.form-group, .form-control-group, [class*="form"]');
+                        const label = formGroup?.querySelector('label')?.textContent?.trim() || '';
+                        
+                        if (label === 'Studio' && !scrapedData.studio) {
+                            const studioValue = container.querySelector('.react-select__single-value');
+                            if (studioValue?.textContent) {
+                                scrapedData.studio = studioValue.textContent.trim();
+                            }
+                        } else if (label === 'Performers' && scrapedData.performers.length === 0) {
+                            const performerValues = container.querySelectorAll('.react-select__multi-value__label');
+                            performerValues.forEach(el => {
+                                const text = el.textContent?.trim();
+                                if (text && !text.includes('×')) {
+                                    scrapedData.performers.push(text);
+                                }
+                            });
+                            if (scrapedData.performers.length > 0) {
+                            }
+                        } else if (label === 'Tags' && scrapedData.tags.length === 0) {
+                            const tagValues = container.querySelectorAll('.react-select__multi-value__label');
+                            tagValues.forEach(el => {
+                                const text = el.textContent?.trim();
+                                if (text && !text.includes('×') && !scrapedData.performers.includes(text)) {
+                                    scrapedData.tags.push(text);
+                                }
+                            });
+                            if (scrapedData.tags.length > 0) {
+                            }
+                        }
+                    });
+                    
+                    
+                    // Log all visible text inputs with values
+                    const visibleInputs = Array.from(document.querySelectorAll('input[type="text"]:not([type="hidden"]), input[type="date"]:not([type="hidden"])')).filter(i => i.offsetParent !== null);
+                    visibleInputs.forEach(input => {
+                        if (input.value) {
+                            const label = input.closest('.form-group')?.querySelector('label')?.textContent || 'No label';
+                        }
+                    });
+                    
+                    // Log all React Select components with values
+                    document.querySelectorAll('.react-select__value-container').forEach(container => {
+                        const label = container.closest('.form-group')?.querySelector('label')?.textContent || 'No label';
+                        const singleValue = container.querySelector('.react-select__single-value')?.textContent;
+                        const multiValues = Array.from(container.querySelectorAll('.react-select__multi-value__label')).map(el => el.textContent);
+                        if (singleValue || multiValues.length > 0) {
+                        }
+                    });
+                    
+                    // Check if we're in the right context
+                }
+                
+                return scrapedData;
+            } catch (error) {
+                return scrapedData;
+            }
+        }
+
+        /**
+         * Get image resolution from URL
+         * @param {string} url - Image URL to analyze
+         * @returns {Promise<Object>} Resolution object with width, height, and total pixels
+         */
+        async getImageResolution(url) {
+            return new Promise((resolve) => {
+                if (!url) {
+                    resolve({ width: 0, height: 0, pixels: 0 });
+                    return;
+                }
+                
+                const img = new Image();
+                img.crossOrigin = 'anonymous'; // Handle CORS if needed
+                
+                img.onload = () => {
+                    const resolution = {
+                        width: img.width,
+                        height: img.height,
+                        pixels: img.width * img.height
+                    };
+                    resolve(resolution);
+                };
+                
+                img.onerror = () => {
+                    resolve({ width: 0, height: 0, pixels: 0 });
+                };
+                
+                img.src = url;
+            });
+        }
+
+        /**
+         * Compare current and scraped thumbnail resolutions
+         * @param {string} currentUrl - Current thumbnail URL
+         * @param {string} scrapedUrl - Scraped thumbnail URL
+         * @returns {Promise<Object>} Comparison result with recommendation
+         */
+        async compareThumbnails(currentUrl, scrapedUrl) {
+            
+            if (!scrapedUrl) {
+                return {
+                    shouldUpdate: false,
+                    reason: 'No scraped thumbnail available',
+                    currentRes: null,
+                    scrapedRes: null
+                };
+            }
+            
+            try {
+                // Get both resolutions in parallel
+                const [currentRes, scrapedRes] = await Promise.all([
+                    this.getImageResolution(currentUrl),
+                    this.getImageResolution(scrapedUrl)
+                ]);
+                
+                const improvementPixels = scrapedRes.pixels - currentRes.pixels;
+                const improvementPercent = currentRes.pixels > 0 
+                    ? ((improvementPixels / currentRes.pixels) * 100).toFixed(1)
+                    : 100;
+                
+                const result = {
+                    shouldUpdate: scrapedRes.pixels > currentRes.pixels,
+                    currentRes: currentRes,
+                    scrapedRes: scrapedRes,
+                    improvementPixels: improvementPixels,
+                    improvementPercent: improvementPercent,
+                    reason: ''
+                };
+                
+                if (result.shouldUpdate) {
+                    result.reason = `Scraped thumbnail is ${improvementPercent}% larger (${scrapedRes.width}x${scrapedRes.height} vs ${currentRes.width}x${currentRes.height})`;
+                } else if (scrapedRes.pixels === currentRes.pixels) {
+                    result.reason = 'Thumbnails have the same resolution';
+                } else {
+                    result.reason = `Current thumbnail is higher resolution (${currentRes.width}x${currentRes.height} vs ${scrapedRes.width}x${scrapedRes.height})`;
+                }
+                
+                return result;
+            } catch (error) {
+                return {
+                    shouldUpdate: false,
+                    reason: 'Error comparing thumbnails',
+                    currentRes: null,
+                    scrapedRes: null,
+                    error: error.message
+                };
+            }
+        }
+
+        /**
+         * Get current scene thumbnail URL
+         * @returns {string|null} Current thumbnail URL or null if not found
+         */
+        getCurrentThumbnail() {
+            
+            // Try multiple selectors to find the current thumbnail
+            const selectors = [
+                '.scene-cover img',
+                '.SceneCover img',
+                '.scene-card-preview img',
+                '.scene-details img.scene-cover',
+                'img[alt*="scene" i][src*="image"]',
+                'img[alt*="cover" i]',
+                '.detail-header img',
+                '.detail-container img[src*="/scene/"]'
+            ];
+            
+            for (const selector of selectors) {
+                const img = document.querySelector(selector);
+                if (img && img.src) {
+                    return img.src;
+                }
+            }
+            
+            return null;
+        }
+
+// Clean version of showScrapedDataConfirmation method
+// This replaces the broken method starting at line 3601 and ending at line 4087
+
+async showScrapedDataConfirmation(scrapedData, hasScrapedSource = false) {
+    
+    return new Promise(async (resolve) => {
+        // Create action widget (no backdrop or dialog)
+        const actionWidget = document.createElement('div');
+        actionWidget.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            z-index: 10004;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            min-width: 350px;
+            max-width: 450px;
+            border: 2px solid rgba(255,255,255,0.2);
+            animation: slideIn 0.3s ease-out;
+        `;
+
+        // Add slide-in animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from {
+                    opacity: 0;
+                    transform: translateX(100%);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Check if we have data
+        const hasData = scrapedData && (
+            scrapedData.title || scrapedData.date || scrapedData.studio || 
+            (scrapedData.performers && scrapedData.performers.length > 0) || 
+            (scrapedData.tags && scrapedData.tags.length > 0) || 
+            scrapedData.details || scrapedData.url || scrapedData.studioCode ||
+            scrapedData.group || scrapedData.thumbnail
+        );
+
+        // Count the amount of data found
+        let dataCount = 0;
+        if (scrapedData) {
+            if (scrapedData.title) dataCount++;
+            if (scrapedData.date) dataCount++;
+            if (scrapedData.studio) dataCount++;
+            if (scrapedData.performers && scrapedData.performers.length > 0) dataCount += scrapedData.performers.length;
+            if (scrapedData.tags && scrapedData.tags.length > 0) dataCount += scrapedData.tags.length;
+            if (scrapedData.details) dataCount++;
+            if (scrapedData.url) dataCount++;
+            if (scrapedData.studioCode) dataCount++;
+            if (scrapedData.group) dataCount++;
+            if (scrapedData.thumbnail) dataCount++;
+        }
+
+        // Check thumbnail resolution only if at least one source has been scraped
+        let thumbnailComparison = null;
+        let thumbnailMessage = null;
+        if (hasScrapedSource && scrapedData && scrapedData.thumbnail) {
+            const currentThumbnail = this.getCurrentThumbnail();
+            thumbnailComparison = await this.compareThumbnails(currentThumbnail, scrapedData.thumbnail);
+            
+            // Store the comparison message for display
+            if (thumbnailComparison.shouldUpdate) {
+                thumbnailMessage = `✅ Thumbnail: ${thumbnailComparison.improvementPercent}% larger (${thumbnailComparison.scrapedRes.width}x${thumbnailComparison.scrapedRes.height})`;
+            } else {
+                thumbnailMessage = `⚠️ Thumbnail: Current is better (${thumbnailComparison.currentRes.width}x${thumbnailComparison.currentRes.height} vs ${thumbnailComparison.scrapedRes.width}x${thumbnailComparison.scrapedRes.height})`;
+                // Optionally filter out thumbnail if current is better
+                if (getConfig('PREFER_HIGHER_RES_THUMBNAILS')) {
+                    delete scrapedData.thumbnail;
+                    dataCount--;
+                }
+            }
+        } else if (scrapedData && scrapedData.thumbnail && !hasScrapedSource) {
+            thumbnailMessage = `🖼️ Thumbnail: New thumbnail available`;
+        }
+
+        // Create widget content with just the action buttons
+        if (!hasData) {
+            actionWidget.innerHTML = `
+                <div>
+                    <h4 style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600;">⚠️ No Metadata Found</h4>
+                    <p style="margin: 0 0 15px 0; font-size: 13px; opacity: 0.9;">The scraper didn't return any data for this scene.</p>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="skip-scraped-data" style="
+                            flex: 1;
+                            background: #f39c12;
+                            color: white;
+                            border: none;
+                            padding: 8px 12px;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-weight: bold;
+                        ">⏩ Skip</button>
+                        <button id="cancel-scraped-data" style="
+                            flex: 1;
+                            background: #e74c3c;
+                            color: white;
+                            border: none;
+                            padding: 8px 12px;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-weight: bold;
+                        ">❌ Cancel</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Build a summary of what was found
+            let summaryText = [];
+            if (scrapedData.title) summaryText.push('Title');
+            if (scrapedData.studio) summaryText.push('Studio');
+            if (scrapedData.date) summaryText.push('Date');
+            if (scrapedData.performers && scrapedData.performers.length > 0) {
+                summaryText.push(`${scrapedData.performers.length} Performer${scrapedData.performers.length > 1 ? 's' : ''}`);
+            }
+            if (scrapedData.tags && scrapedData.tags.length > 0) {
+                summaryText.push(`${scrapedData.tags.length} Tag${scrapedData.tags.length > 1 ? 's' : ''}`);
+            }
+            if (scrapedData.details) summaryText.push('Details');
+            if (scrapedData.thumbnail && thumbnailComparison && thumbnailComparison.shouldUpdate) {
+                summaryText.push(`Thumbnail (${thumbnailComparison.improvementPercent}% larger)`);
+            } else if (scrapedData.thumbnail) {
+                summaryText.push('Thumbnail');
+            }
+            
+            const summaryString = summaryText.length > 0 ? summaryText.join(', ') : 'Metadata';
+            
+            actionWidget.innerHTML = `
+                <div>
+                    <h4 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">✨ Metadata Found!</h4>
+                    <p style="margin: 0 0 5px 0; font-size: 13px; opacity: 0.9;">Found: ${summaryString}</p>
+                    ${thumbnailMessage ? `<p style="margin: 0 0 5px 0; font-size: 12px; opacity: 0.85;">${thumbnailMessage}</p>` : ''}
+                    <p style="margin: 0 0 15px 0; font-size: 12px; opacity: 0.7;">Review the changes and choose an action:</p>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="apply-scraped-data" style="
+                            flex: 1;
+                            background: #27ae60;
+                            color: white;
+                            border: none;
+                            padding: 8px 12px;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-weight: bold;
+                        ">✅ Apply</button>
+                        <button id="skip-scraped-data" style="
+                            flex: 1;
+                            background: #f39c12;
+                            color: white;
+                            border: none;
+                            padding: 8px 12px;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-weight: bold;
+                        ">⏩ Skip</button>
+                        <button id="cancel-scraped-data" style="
+                            flex: 1;
+                            background: #e74c3c;
+                            color: white;
+                            border: none;
+                            padding: 8px 12px;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-weight: bold;
+                        ">❌ Cancel</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Setup event handlers
+        const applyBtn = actionWidget.querySelector('#apply-scraped-data');
+        if (applyBtn) {
+            applyBtn.onclick = () => {
+                actionWidget.remove();
+                resolve('apply');
+            };
+        }
+
+        const skipBtn = actionWidget.querySelector('#skip-scraped-data');
+        if (skipBtn) {
+            skipBtn.onclick = () => {
+                actionWidget.remove();
+                resolve('skip');
+            };
+        }
+
+        const cancelBtn = actionWidget.querySelector('#cancel-scraped-data');
+        if (cancelBtn) {
+            cancelBtn.onclick = () => {
+                actionWidget.remove();
+                resolve('cancel');
+            };
+        }
+
+        // Add widget to page
+        document.body.appendChild(actionWidget);
+    });
+}
+
         async applyScrapedData() {
-            console.log('💾 Applying scraped data...');
-            this.updateSceneStatus('💾 Applying scraped data...');
+            this.updateSceneStatus('📊 Analyzing scraped metadata...');
 
             await this.wait(2000);
+
+            // Check current scene status to see if any source has been scraped
+            const currentStatus = await this.statusTracker.detectCurrentStatus();
+            const hasScrapedSource = currentStatus.stashdb.scraped || currentStatus.theporndb.scraped;
+
+            // Check if auto-apply is disabled
+            if (!getConfig(CONFIG.AUTO_APPLY_CHANGES)) {
+                
+                // Collect the scraped data
+                const scrapedData = await this.collectScrapedData();
+                
+                // Show confirmation dialog (pass scraping status for thumbnail check)
+                const userChoice = await this.showScrapedDataConfirmation(scrapedData, hasScrapedSource);
+                
+                if (userChoice === 'cancel') {
+                    this.updateSceneStatus('❌ Cancelled by user');
+                    notifications.show('❌ Automation cancelled', 'warning');
+                    return 'cancel';
+                } else if (userChoice === 'skip') {
+                    this.updateSceneStatus('⏩ Skipped source');
+                    notifications.show('⏩ Skipped scraper source', 'info');
+                    return 'skip';
+                }
+                
+            } else {
+            }
+
+            this.updateSceneStatus('✅ Applying metadata changes...');
 
             const allButtons = document.querySelectorAll('button, .btn, input[type="button"], input[type="submit"]');
             for (const btn of allButtons) {
                 const text = btn.textContent || btn.value || '';
                 if (text.toLowerCase().includes('apply')) {
-                    console.log('✅ Found Apply button:', text.trim());
                     if (!btn.disabled) {
                         btn.click();
                         await this.wait(1500);
-                        console.log('✅ Applied scraped data');
-                        return;
+                        notifications.show('✅ Metadata applied successfully', 'success');
+                        return 'apply';
                     }
                 }
             }
 
-            console.log('⚠️ No Apply button found or button disabled');
+            return 'skip';
         }
 
         async createNewPerformers() {
@@ -3168,7 +4713,6 @@ Total Errors: ${stats.errorsCount}`;
                             }
                         }
                     } catch (error) {
-                        console.error('Error creating new entry:', error);
                     }
                 }
             }
@@ -3181,7 +4725,6 @@ Total Errors: ${stats.errorsCount}`;
             // Double-check if already organized before proceeding
             const isAlreadyOrganized = await this.checkOrganizedStatus();
             if (isAlreadyOrganized) {
-                console.log('✅ Scene is already organized, skipping organize click');
                 this.updateSceneStatus('✅ Scene already organized');
                 return;
             }
@@ -3189,32 +4732,26 @@ Total Errors: ${stats.errorsCount}`;
             // Find organize button
             const organizedToggle = this.findOrganizedCheckbox();
             if (!organizedToggle) {
-                console.error('❌ Could not find organize button');
                 this.updateSceneStatus('❌ Organize button not found');
                 return;
             }
 
             // Check button state and only click if not already organized
             if (!organizedToggle.checked) {
-                console.log('📁 Clicking organize button...');
                 organizedToggle.click();
                 await this.wait(1500); // Wait for UI update
                 
                 // Verify the organization was successful
                 const newStatus = await this.checkOrganizedStatus();
                 if (newStatus) {
-                    console.log('✅ Scene successfully organized');
                     this.updateSceneStatus('✅ Organized');
                 } else {
-                    console.warn('⚠️ Organization may have failed - status unchanged');
                     this.updateSceneStatus('⚠️ Organization status unclear');
                 }
                 
                 // Update status widget after organize change
-                console.log('📊 Updating status widget after organize...');
                 await this.updateStatusAfterOrganize();
             } else {
-                console.log('✅ Organize button already active');
                 this.updateSceneStatus('✅ Scene already organized');
                 
                 // Still update widget to ensure accuracy
@@ -3225,20 +4762,16 @@ Total Errors: ${stats.errorsCount}`;
         async updateStatusAfterOrganize() {
             try {
                 // Wait longer for organize state to fully update in backend
-                console.log('⏳ Waiting for organize state to update in backend...');
                 await this.wait(3000);
                 
                 // Clear GraphQL cache to ensure fresh data
                 if (this.sourceDetector && this.sourceDetector.cache) {
                     this.sourceDetector.cache.clear();
-                    console.log('🔄 Cleared GraphQL cache');
                 }
                 
                 // Trigger status update from DOM
                 await this.updateStatusFromDOM();
-                console.log('📊 Status updated after organize');
             } catch (error) {
-                console.warn('⚠️ Error updating status after organize:', error);
             }
         }
 
@@ -3254,7 +4787,6 @@ Total Errors: ${stats.errorsCount}`;
                     await this.wait(2000);
                     
                     // Update status widget after save
-                    console.log('📊 Updating status widget after save...');
                     await this.updateStatusAfterSave();
                     return;
                 }
@@ -3264,20 +4796,16 @@ Total Errors: ${stats.errorsCount}`;
         async updateStatusAfterSave() {
             try {
                 // Wait longer for save to fully complete and backend to update
-                console.log('⏳ Waiting for save to complete in backend...');
                 await this.wait(3000);
                 
                 // Clear GraphQL cache to ensure fresh data
                 if (this.sourceDetector && this.sourceDetector.cache) {
                     this.sourceDetector.cache.clear();
-                    console.log('🔄 Cleared GraphQL cache');
                 }
                 
                 // Trigger status update from DOM (will be handled by mutation observer or manually)
                 await this.updateStatusFromDOM();
-                console.log('📊 Status updated after save');
             } catch (error) {
-                console.warn('⚠️ Error updating status after save:', error);
             }
         }
 
@@ -3325,27 +4853,40 @@ Total Errors: ${stats.errorsCount}`;
                 try {
                     const organizedStatus = await this.sourceDetector.detectOrganizedStatus();
                     if (organizedStatus.found && organizedStatus.confidence >= 100) {
-                        console.log(`📊 Organized status from GraphQL: ${organizedStatus.organized}`);
                         return organizedStatus.organized;
                     }
                 } catch (error) {
-                    console.warn('⚠️ GraphQL organized status check failed:', error.message);
                 }
             }
             
             // Fallback to DOM-based detection
             const checkbox = this.findOrganizedCheckbox();
             const domStatus = checkbox ? checkbox.checked : false;
-            console.log(`📊 Organized status from DOM: ${domStatus}`);
             return domStatus;
         }
 
         wait(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
+            return new Promise((resolve, reject) => {
+                const checkInterval = 100; // Check for cancellation every 100ms
+                let elapsed = 0;
+                
+                const interval = setInterval(() => {
+                    if (this.automationCancelled) {
+                        clearInterval(interval);
+                        reject(new Error('Automation cancelled'));
+                        return;
+                    }
+                    
+                    elapsed += checkInterval;
+                    if (elapsed >= ms) {
+                        clearInterval(interval);
+                        resolve();
+                    }
+                }, checkInterval);
+            });
         }
 
         async waitForPageRerender() {
-            console.log('⏳ Waiting for page re-render after save...');
             
             // Initial wait for save to complete
             await this.wait(2000);
@@ -3373,7 +4914,6 @@ Total Errors: ${stats.errorsCount}`;
                         );
                         
                         if (hasImageChanges) {
-                            console.log('📸 Detected thumbnail/image changes');
                             rerenderDetected = true;
                         }
                     }
@@ -3382,7 +4922,6 @@ Total Errors: ${stats.errorsCount}`;
                     if (mutation.type === 'attributes' && 
                         mutation.target.tagName === 'IMG' && 
                         mutation.attributeName === 'src') {
-                        console.log('🖼️ Detected image src change');
                         rerenderDetected = true;
                     }
                 }
@@ -3404,7 +4943,6 @@ Total Errors: ${stats.errorsCount}`;
                 // Also check for any loading indicators disappearing
                 const loadingElements = document.querySelectorAll('.loading, .spinner, [class*="loading"]');
                 if (loadingElements.length === 0 && waitTime > 3000) {
-                    console.log('📋 No loading indicators found, assuming render complete');
                     break;
                 }
             }
@@ -3413,20 +4951,18 @@ Total Errors: ${stats.errorsCount}`;
             observer.disconnect();
             
             if (rerenderDetected) {
-                console.log('✅ Page re-render detected, waiting additional time for completion...');
                 await this.wait(1500); // Additional wait for render to complete
             } else if (waitTime >= maxWaitTime) {
-                console.log('⏰ Re-render wait timeout reached, proceeding...');
             } else {
-                console.log('✅ Page appears stable, proceeding...');
             }
             
-            console.log(`⏱️ Total re-render wait time: ${waitTime + (rerenderDetected ? 1500 : 0)}ms`);
         }
     }
 
     // ===== INITIALIZATION =====
     const uiManager = new UIManager();
+    
+    window.stashUIManager = uiManager;
 
     // Initialize UI after DOM is ready
     async function initializeUI() {
@@ -3438,16 +4974,13 @@ Total Errors: ${stats.errorsCount}`;
             const isOrganized = await uiManager.checkOrganizedStatus();
             
             if (isOrganized) {
-                console.log('📁 Scene is already organized, starting minimized');
                 uiManager.createMinimizedButton();
                 uiManager.isMinimized = true;
             } else {
-                console.log('📁 Scene is not organized, showing full panel');
                 uiManager.createPanel();
             }
         } else {
             // On non-scene pages, always show minimized button
-            console.log('🔧 Non-scene page, showing minimized settings button');
             uiManager.createMinimizedButton();
             uiManager.isMinimized = true;
         }
@@ -3462,10 +4995,8 @@ Total Errors: ${stats.errorsCount}`;
         setTimeout(initializeUI, 1000);
     }
 
-    // Global access for debugging
     window.uiManager = uiManager;
     window.expandAutomateStash = () => uiManager.expand();
 
-    console.log('✅ AutomateStash Final initialized successfully');
 
 })();

@@ -4,10 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Stash userscript development repository containing a comprehensive suite of Greasemonkey/Tampermonkey userscripts that automate and enhance Stash (a self-hosted adult content management system).
+This is a comprehensive Stash enhancement repository containing userscripts, a native Stash plugin, and a browser extension that automate and enhance Stash (a self-hosted adult content management system).
 
-### Current State (Updated: 2025-01-30)
-- **AutomateStash Final v4.4.0**: `AutomateStash-Final.js` (1150+ lines) - Production-ready automation script
+### Deployment Options (Updated: 2025-02-06)
+
+#### 1. Userscripts (Greasemonkey/Tampermonkey)
+- **AutomateStash Final v4.18.0**: `AutomateStash-Final.js` (1150+ lines) - Production-ready automation script with re-scrape functionality
 - **Bulk Operations Manager v1.3.1**: `StashBulkOperations.js` (2800+ lines) - Advanced bulk scene management
 - **Quality Analyzer v1.0.1**: `StashQualityAnalyzer.js` (1600+ lines) - Video quality assessment and duplicate detection
 - **Performance Monitor v1.0.8**: `StashPerformanceMonitor.js` (2800+ lines) - Real-time performance monitoring and optimization
@@ -15,7 +17,18 @@ This is a Stash userscript development repository containing a comprehensive sui
 - **Collection Organizer v1.0.2**: `StashCollectionOrganizer.js` (2800+ lines) - Smart organization and metadata analysis
 - **Export/Import Tools v1.0.0**: `StashExportImportTools.js` (2100+ lines) - Data portability and backup solutions
 - **Legacy Version**: `AutomateStash.js` (4500+ lines) - Original complex implementation (reference only)
-- **Development Versions**: `AutomateStash-Clean.js`, `AutomateStash-Enhanced.js` - Testing and diagnostic versions
+
+#### 2. Stash Plugin (Native Integration)
+- **AutomateStash Plugin v4.5.0**: `stash-plugin/` - Native Stash plugin implementation
+- Direct integration with Stash's plugin system
+- No browser extension required
+- Enhanced debugging capabilities with dedicated panel detection scripts
+
+#### 3. Browser Extension (Chrome/Edge/Firefox)
+- **Stash Suite Extension v1.0.0**: `stash-suite-extension/` - Full-featured browser extension
+- Manifest V3 compatible
+- Service worker architecture for background processing
+- Comprehensive settings and popup UI
 
 ## Core Architecture
 
@@ -108,19 +121,56 @@ const STASH_CONFIG = {
 };
 ```
 
+## Installation & Deployment
+
+### Option 1: Userscripts (Simplest)
+1. Install [Tampermonkey](https://www.tampermonkey.net/) or [Greasemonkey](https://www.greasespot.net/)
+2. Open desired script (e.g., `AutomateStash-Final.js`)
+3. Click "Install" when prompted
+4. Navigate to Stash at `http://localhost:9998`
+
+### Option 2: Stash Plugin (Native Integration)
+1. Copy `stash-plugin/` folder to your Stash plugins directory
+2. Restart Stash server
+3. Enable "AutomateStash" in Settings → Plugins
+4. No browser extension required
+
+### Option 3: Browser Extension (Full Features)
+1. Open Chrome/Edge and navigate to `chrome://extensions/`
+2. Enable "Developer mode"
+3. Click "Load unpacked"
+4. Select `stash-suite-extension/` folder
+5. Extension icon will appear in toolbar
+
 ## Development Workflow
 
+### Userscript Development
 **No Build Process:** Direct userscript development - edit JavaScript files and reload in browser
 
-**Development Commands:**
 ```bash
 # No build commands - direct editing
 # Install userscript in Greasemonkey/Tampermonkey
 # Reload page to test changes
 ```
 
+### Plugin Development
+```bash
+# Copy to Stash plugins directory
+cp -r stash-plugin/ ~/.stash/plugins/
+
+# Restart Stash to load plugin
+# Check plugin UI at http://localhost:9998
+```
+
+### Extension Development
+```bash
+# Load unpacked extension in Chrome
+# Make changes to source files
+# Click "Reload" in chrome://extensions/
+# Test at http://localhost:9998
+```
+
 **Testing Approach:**
-- Install in Greasemonkey/Tampermonkey
 - Test against running Stash instance on localhost:9998
 - Verify React component interactions and SPA navigation
 - Test cancellation and error recovery scenarios
@@ -135,6 +185,8 @@ const STASH_CONFIG = {
 - `debugListAllFormElements()` for comprehensive form analysis
 - Confidence scoring system for scraper detection (0.0-1.0)
 - Phase logging with emoji prefixes for automation progress tracking
+- Plugin debug panel: `debug-edit-panel-enhanced.js`
+- Extension DevTools: Service worker logs in browser console
 
 ## Integration Dependencies
 
@@ -157,6 +209,33 @@ const STASH_CONFIG = {
 ├── StashExportImportTools.js    # Export/Import tools v1.0.0 (2100+ lines) ✅ COMPLETED
 ├── CLAUDE.md                     # This file
 ├── ROADMAP.md                    # Development roadmap and progress tracking
+├── AGENTS.md                     # Agent architecture documentation
+├── AUTOMATESTASH_DEVELOPMENT_PLAN.md # Comprehensive development plan
+├── stash-plugin/                 # Native Stash plugin implementation
+│   ├── automate-stash.yml        # Plugin manifest
+│   ├── automate-stash.css        # Plugin styles
+│   ├── automate-stash-enhanced.js # Main plugin script
+│   ├── automate-stash-compact.js # Compact version
+│   ├── debug-edit-panel.js      # Debug utilities
+│   ├── INSTALLATION.md           # Plugin installation guide
+│   ├── TROUBLESHOOTING.md        # Plugin troubleshooting
+│   └── README.md                 # Plugin documentation
+├── stash-suite-extension/        # Browser extension implementation
+│   ├── manifest.json             # Extension manifest (V3)
+│   ├── src/                      # Extension source code
+│   │   ├── background/           # Service worker
+│   │   ├── content/              # Content scripts
+│   │   ├── common/               # Shared utilities
+│   │   ├── popup/                # Extension popup
+│   │   └── options/              # Settings page
+│   ├── assets/                   # Styles and images
+│   ├── icons/                    # Extension icons
+│   └── README.md                 # Extension documentation
+├── .github/                      # GitHub workflows
+│   ├── workflows/
+│   │   ├── claude.yml            # Claude PR Assistant
+│   │   └── claude-code-review.yml # Code review workflow
+│   └── copilot-instructions.md  # GitHub Copilot guide
 └── .kiro/specs/                  # Feature specifications
     ├── fix-minimize-button/      # ✅ COMPLETED
     ├── enhanced-status-tracking/ # ✅ COMPLETED
@@ -388,9 +467,44 @@ Comprehensive data portability solution for backing up, migrating, and synchroni
 - **Progress Tracking**: Real-time operation monitoring
 - **Data Validation**: Import preview and conflict resolution
 
-## Recent Updates (2025-01-30)
+## Recent Updates (2025-02-06)
 
-### Major Completions
+### AutomateStash v4.18.0 - Re-scrape Functionality
+- ✅ **Re-scrape UI** - Dynamic interface shows when sources already scraped
+- ✅ **Force Re-scrape** - Bypass skip logic with checkbox selections
+- ✅ **Selective Scraping** - Choose specific sources (StashDB/ThePornDB) to re-scrape
+- ✅ **Auto Detection** - Automatically detects which sources have been scraped
+- ✅ **State Management** - Re-scrape options reset after automation completes
+
+### AutomateStash v4.17.1 - Thumbnail Resolution Comparison
+- ✅ **Resolution Detection** - Compares current vs scraped thumbnail resolutions
+- ✅ **Smart Updates** - Only updates if scraped thumbnail has higher resolution
+- ✅ **UI Feedback** - Shows improvement percentage in confirmation dialog
+- ✅ **Conditional Check** - Only compares when sources already scraped
+- ✅ **Configuration Option** - PREFER_HIGHER_RES_THUMBNAILS setting
+
+### Major Additions
+- ✅ **Stash Plugin Implementation** - Native plugin with direct Stash integration
+- ✅ **Browser Extension** - Full-featured Manifest V3 extension with service worker
+- ✅ **GitHub Actions** - Automated PR assistance and code review workflows
+- ✅ **Enhanced Documentation** - Comprehensive installation and troubleshooting guides
+
+### Plugin Features (stash-plugin/)
+- Direct integration with Stash's plugin system
+- Multiple script variants (enhanced, compact, bypass)
+- Dedicated debugging utilities for edit panel detection
+- CSS styling integration for improved UI
+- YAML manifest configuration
+
+### Extension Features (stash-suite-extension/)
+- Manifest V3 compatible with service worker architecture
+- Modular content scripts for all automation tools
+- GraphQL client with intelligent request handling
+- Settings sync across browser instances
+- Popup interface for quick access to features
+- Options page for comprehensive configuration
+
+### Previous Updates (2025-01-30)
 - ✅ **All 6 Advanced Management Tools** completed and tested
 - ✅ **Enhanced Status Tracking** (v4.3.3) - GraphQL integration for accurate source detection
 - ✅ **Global Widget Availability** (v4.4.0) - Widget accessible throughout entire Stash application
@@ -405,9 +519,11 @@ Comprehensive data portability solution for backing up, migrating, and synchroni
 - Consolidated UI/UX with single settings location
 - Added comprehensive spec-driven development process
 - All tools now follow consistent architecture patterns
+- Added three deployment options: userscripts, plugin, and extension
 
 ### Breaking Changes
 - None - all updates maintain backward compatibility
+- Plugin and extension are optional alternatives to userscripts
 
 ## Development Best Practices
 
