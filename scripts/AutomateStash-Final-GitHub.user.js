@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AutomateStash Final Enhanced
 // @namespace    https://github.com/Stonelukas/stash-userscripts
-// @version      5.4.0
+// @version      5.5.0
 // @description  AutomateStash - with performance enhancements and post-automation summary widget
 // @author       AutomateStash Team
 // @match        http://localhost:9998/*
@@ -3671,15 +3671,108 @@
             });
             container.appendChild(speedDiv);
 
+            // Widget Animation Settings
+            const widgetAnimDiv = document.createElement('div');
+            widgetAnimDiv.style.cssText = 'margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px;';
+            widgetAnimDiv.innerHTML = `
+                <h4 style="color: #ecf0f1; margin-bottom: 15px;">Widget Animations</h4>
+            `;
+            
+            // Available animations from animation-controller.js
+            const availableAnimations = [
+                'fadeIn', 'fadeOut', 'slideInRight', 'slideInLeft', 'slideInUp', 
+                'slideOutRight', 'slideOutLeft', 'slideOutDown', 'scaleIn', 'scaleOut',
+                'rotateIn', 'shake', 'pulse', 'bounce', 'spin', 'shimmer'
+            ];
+            
+            const easingOptions = [
+                'linear', 'ease', 'easeIn', 'easeOut', 'easeInOut',
+                'spring', 'bounce', 'easeInQuad', 'easeOutQuad', 'easeInOutQuad'
+            ];
+            
+            // Widget animation configurations
+            const widgetConfigs = [
+                { id: 'main-panel', name: 'Main Panel', defaultAnim: 'fadeIn', defaultDuration: 300 },
+                { id: 'enhanced-settings', name: 'Enhanced Settings', defaultAnim: 'scaleIn', defaultDuration: 400 },
+                { id: 'performance-widget', name: 'Performance Widget', defaultAnim: 'slideInRight', defaultDuration: 350 },
+                { id: 'summary-widget', name: 'Summary Widget', defaultAnim: 'slideInLeft', defaultDuration: 350 },
+                { id: 'notifications', name: 'Notifications', defaultAnim: 'slideInUp', defaultDuration: 250 },
+                { id: 'minimized-button', name: 'Minimized Button', defaultAnim: 'bounce', defaultDuration: 500 }
+            ];
+            
+            widgetConfigs.forEach(widget => {
+                const widgetRow = document.createElement('div');
+                widgetRow.style.cssText = 'margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 4px;';
+                
+                widgetRow.innerHTML = `
+                    <div style="display: grid; grid-template-columns: 150px 1fr 100px 120px 80px; gap: 10px; align-items: center;">
+                        <label style="color: #ecf0f1; font-size: 13px;">${widget.name}:</label>
+                        <select class="anim-select" data-widget="${widget.id}" style="background: #34495e; color: white; border: 1px solid #556d7f; padding: 5px; border-radius: 4px;">
+                            ${availableAnimations.map(anim => 
+                                `<option value="${anim}" ${anim === widget.defaultAnim ? 'selected' : ''}>${anim}</option>`
+                            ).join('')}
+                        </select>
+                        <input type="number" class="duration-input" data-widget="${widget.id}" 
+                               value="${widget.defaultDuration}" min="100" max="2000" step="50"
+                               style="background: #34495e; color: white; border: 1px solid #556d7f; padding: 5px; border-radius: 4px;"
+                               placeholder="Duration (ms)">
+                        <select class="easing-select" data-widget="${widget.id}" style="background: #34495e; color: white; border: 1px solid #556d7f; padding: 5px; border-radius: 4px;">
+                            ${easingOptions.map(easing => 
+                                `<option value="${easing}">${easing}</option>`
+                            ).join('')}
+                        </select>
+                        <button class="preview-btn" data-widget="${widget.id}" style="background: #667eea; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
+                            Preview
+                        </button>
+                    </div>
+                `;
+                
+                widgetAnimDiv.appendChild(widgetRow);
+            });
+            
+            // Save animations button
+            const saveAnimBtn = document.createElement('button');
+            saveAnimBtn.textContent = 'Save Animation Settings';
+            saveAnimBtn.style.cssText = `
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+                margin-top: 15px;
+                width: 100%;
+            `;
+            saveAnimBtn.addEventListener('click', () => {
+                const animSettings = {};
+                widgetConfigs.forEach(widget => {
+                    const animSelect = widgetAnimDiv.querySelector(`.anim-select[data-widget="${widget.id}"]`);
+                    const durationInput = widgetAnimDiv.querySelector(`.duration-input[data-widget="${widget.id}"]`);
+                    const easingSelect = widgetAnimDiv.querySelector(`.easing-select[data-widget="${widget.id}"]`);
+                    
+                    animSettings[widget.id] = {
+                        animation: animSelect.value,
+                        duration: parseInt(durationInput.value),
+                        easing: easingSelect.value
+                    };
+                });
+                
+                GM_setValue('widget_animations', JSON.stringify(animSettings));
+                notifications.show('Animation settings saved!', 'success');
+            });
+            widgetAnimDiv.appendChild(saveAnimBtn);
+            
+            container.appendChild(widgetAnimDiv);
+
             // Animation preview
             const previewDiv = document.createElement('div');
             previewDiv.innerHTML = `
-                <h4 style="color: #ecf0f1; margin-bottom: 10px;">Animation Preview</h4>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                <h4 style="color: #ecf0f1; margin-bottom: 10px;">Quick Animation Preview</h4>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
             `;
             
-            const animations = ['fadeIn', 'slideIn', 'bounce', 'pulse', 'shake', 'zoom'];
-            animations.forEach(anim => {
+            const quickAnimations = ['fadeIn', 'slideInRight', 'bounce', 'pulse', 'shake', 'scaleIn', 'rotateIn', 'shimmer'];
+            quickAnimations.forEach(anim => {
                 const btn = document.createElement('button');
                 btn.textContent = anim;
                 btn.style.cssText = `
@@ -3689,7 +3782,14 @@
                     padding: 8px;
                     border-radius: 4px;
                     cursor: pointer;
+                    transition: all 0.2s;
                 `;
+                btn.addEventListener('mouseenter', () => {
+                    btn.style.background = 'rgba(255,255,255,0.2)';
+                });
+                btn.addEventListener('mouseleave', () => {
+                    btn.style.background = 'rgba(255,255,255,0.1)';
+                });
                 btn.addEventListener('click', () => {
                     if (window.animationController && window.animationController.animate) {
                         window.animationController.animate(btn, anim, {
@@ -3697,10 +3797,33 @@
                         });
                     }
                 });
-                previewDiv.appendChild(btn);
+                previewDiv.querySelector('div').appendChild(btn);
             });
             
             container.appendChild(previewDiv);
+            
+            // Add event listeners for preview buttons
+            widgetAnimDiv.querySelectorAll('.preview-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const widgetId = e.target.dataset.widget;
+                    const animSelect = widgetAnimDiv.querySelector(`.anim-select[data-widget="${widgetId}"]`);
+                    const durationInput = widgetAnimDiv.querySelector(`.duration-input[data-widget="${widgetId}"]`);
+                    const easingSelect = widgetAnimDiv.querySelector(`.easing-select[data-widget="${widgetId}"]`);
+                    
+                    // Find the corresponding widget or use the button itself as preview
+                    let targetElement = document.querySelector(`#${widgetId}`);
+                    if (!targetElement) {
+                        targetElement = e.target;
+                    }
+                    
+                    if (window.animationController && window.animationController.animate) {
+                        window.animationController.animate(targetElement, animSelect.value, {
+                            duration: parseInt(durationInput.value),
+                            easing: easingSelect.value
+                        });
+                    }
+                });
+            });
 
             return container;
         }
@@ -7483,6 +7606,7 @@
                 notifications.show(`StashDB scraper found no scene${reason}`, 'warning');
                 return { found: false, skip: true, reason: outcome.reason, notFound };
             }
+            
             // Track performance
             if (window.performanceMonitor) {
                 const duration = performance.now() - startTime;
@@ -7495,16 +7619,14 @@
                 });
             }
             
-            // Track ThePornDB completion
-            if (window.performanceMonitor) {
-                const duration = performance.now() - startTime;
-                window.performanceMonitor.addMetric({
-                    type: 'scraping',
-                    name: 'ThePornDB',
-                    duration: duration,
-                    success: true,
-                    timestamp: Date.now()
+            // Immediately update status after successful scrape
+            if (this.statusTracker) {
+                this.statusTracker.updateStatus('stashdb', {
+                    scraped: true,
+                    timestamp: new Date()
                 });
+                // Force immediate status detection
+                this.statusTracker.detectCurrentStatus();
             }
             
             return { found: true };
@@ -7557,6 +7679,17 @@
                 notifications.show(`ThePornDB scraper found no scene${reason}`, 'warning');
                 return { found: false, skip: true, reason: outcome.reason, notFound };
             }
+            
+            // Immediately update status after successful scrape
+            if (this.statusTracker) {
+                this.statusTracker.updateStatus('theporndb', {
+                    scraped: true,
+                    timestamp: new Date()
+                });
+                // Force immediate status detection
+                this.statusTracker.detectCurrentStatus();
+            }
+            
             return { found: true };
         }
 
@@ -8774,6 +8907,16 @@
                 if (newStatus) {
                     this.updateSceneStatus('✅ Organized');
                     this._organizedAfterSave = true;
+                    
+                    // Immediately update status tracker
+                    if (this.statusTracker) {
+                        this.statusTracker.updateStatus('organized', {
+                            status: true,
+                            timestamp: new Date()
+                        });
+                        // Force immediate status detection
+                        this.statusTracker.detectCurrentStatus();
+                    }
                 } else {
                     this.updateSceneStatus('⚠️ Organization status unclear');
                 }
@@ -8785,6 +8928,16 @@
             } else {
                 this.updateSceneStatus('✅ Scene already organized');
                 this._organizedAfterSave = true;
+                
+                // Immediately update status tracker
+                if (this.statusTracker) {
+                    this.statusTracker.updateStatus('organized', {
+                        status: true,
+                        timestamp: new Date()
+                    });
+                    // Force immediate status detection
+                    this.statusTracker.detectCurrentStatus();
+                }
 
                 // Still update widget to ensure accuracy
                 if (!fast) {
@@ -9209,11 +9362,21 @@
                 
                 window.keyboardShortcuts.setActionCallback('toggleTheme', () => {
                     if (window.themeManager) {
-                        const themes = window.themeManager.getAvailableThemes();
-                        const current = window.themeManager.getCurrentTheme();
-                        const nextIndex = (themes.indexOf(current) + 1) % themes.length;
-                        window.themeManager.setTheme(themes[nextIndex]);
-                        notifications.show(`Theme changed to ${themes[nextIndex]}`, 'info');
+                        // Get all available theme names
+                        const allThemes = window.themeManager.getAllThemes();
+                        const themeNames = Object.keys(allThemes).filter(name => name !== 'system');
+                        
+                        // Get current theme name
+                        const currentThemeName = window.themeManager.currentTheme || 'dark';
+                        
+                        // Find next theme
+                        const currentIndex = themeNames.indexOf(currentThemeName);
+                        const nextIndex = (currentIndex + 1) % themeNames.length;
+                        const nextTheme = themeNames[nextIndex];
+                        
+                        // Apply the next theme
+                        window.themeManager.applyTheme(nextTheme);
+                        notifications.show(`Theme changed to ${allThemes[nextTheme].name || nextTheme}`, 'info');
                     }
                 });
             }
