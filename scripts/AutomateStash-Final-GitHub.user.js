@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AutomateStash Final Enhanced
 // @namespace    https://github.com/Stonelukas/stash-userscripts
-// @version      5.0.3
+// @version      5.0.4
 // @description  AutomateStash - with performance enhancements and post-automation summary widget
 // @author       AutomateStash Team
 // @match        http://localhost:9998/*
@@ -462,9 +462,16 @@
             try {
                 // Check cache if available and this is a query (not mutation)
                 const isQuery = query.trim().toLowerCase().startsWith('query');
-                if (isQuery && window.cacheManager) {
+                if (isQuery && window.graphQLCache) {
+                    const cached = window.graphQLCache.get(query, variables);
+                    if (cached) {
+                        debugLog('📦 Cache hit for GraphQL query');
+                        return cached;
+                    }
+                } else if (isQuery && window.cacheManager) {
+                    // Fallback to basic cache if graphQLCache not available
                     const cacheKey = `gql:${query}:${JSON.stringify(variables)}`;
-                    const cached = window.cacheManager.get(cacheKey);
+                    const cached = window.cacheManager.get('graphql', cacheKey);
                     if (cached) {
                         debugLog('📦 Cache hit for GraphQL query');
                         return cached;
@@ -514,15 +521,23 @@
                 }
 
                 // Track performance if available
-                if (window.performanceMonitor) {
+                if (window.performanceMonitor && window.performanceMonitor.addMetric) {
                     const duration = performance.now() - startTime;
-                    window.performanceMonitor.track('graphql', duration);
+                    window.performanceMonitor.addMetric({
+                        type: 'graphql',
+                        name: 'query',
+                        duration: duration,
+                        timestamp: Date.now()
+                    });
                 }
 
                 // Cache the result if it's a query
-                if (isQuery && window.cacheManager) {
+                if (isQuery && window.graphQLCache) {
+                    window.graphQLCache.set(query, variables, result.data, 30000); // 30 second TTL
+                } else if (isQuery && window.cacheManager) {
+                    // Fallback to basic cache if graphQLCache not available
                     const cacheKey = `gql:${query}:${JSON.stringify(variables)}`;
-                    window.cacheManager.set(cacheKey, result.data, 30000); // 30 second TTL
+                    window.cacheManager.set('graphql', cacheKey, result.data, 30000); // 30 second TTL
                 }
 
                 return result.data;
