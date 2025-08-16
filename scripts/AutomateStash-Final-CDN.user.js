@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         AutomateStash Final Enhanced
+// @name         AutomateStash Final Enhanced (CDN)
 // @namespace    https://github.com/Stonelukas/stash-userscripts
 // @version      5.0.1
-// @description  AutomateStash - with performance enhancements and post-automation summary widget
+// @description  AutomateStash - with performance enhancements via jsDelivr CDN
 // @author       AutomateStash Team
 // @match        http://localhost:9998/*
 // @exclude      http://localhost:9998/scenes/markers?*
@@ -10,17 +10,17 @@
 // @grant        GM_getValue
 // @grant        GM_deleteValue
 // @grant        GM_notification
-// @updateURL    https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/AutomateStash-Final-GitHub.user.js
-// @downloadURL  https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/AutomateStash-Final-GitHub.user.js
+// @updateURL    https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/AutomateStash-Final-CDN.user.js
+// @downloadURL  https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/AutomateStash-Final-CDN.user.js
 // @homepageURL  https://github.com/Stonelukas/stash-userscripts
 // @supportURL   https://github.com/Stonelukas/stash-userscripts/issues
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/config/performance-config.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/config/ui-config.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/cache-manager.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/performance-enhancer.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/ui-theme-manager.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/animation-controller.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/keyboard-shortcuts.js
+// @require      https://cdn.jsdelivr.net/gh/Stonelukas/stash-userscripts@main/scripts/config/performance-config.js
+// @require      https://cdn.jsdelivr.net/gh/Stonelukas/stash-userscripts@main/scripts/config/ui-config.js
+// @require      https://cdn.jsdelivr.net/gh/Stonelukas/stash-userscripts@main/scripts/lib/cache-manager.js
+// @require      https://cdn.jsdelivr.net/gh/Stonelukas/stash-userscripts@main/scripts/lib/performance-enhancer.js
+// @require      https://cdn.jsdelivr.net/gh/Stonelukas/stash-userscripts@main/scripts/lib/ui-theme-manager.js
+// @require      https://cdn.jsdelivr.net/gh/Stonelukas/stash-userscripts@main/scripts/lib/animation-controller.js
+// @require      https://cdn.jsdelivr.net/gh/Stonelukas/stash-userscripts@main/scripts/lib/keyboard-shortcuts.js
 // ==/UserScript==
 
 (function () {
@@ -7685,13 +7685,11 @@
 
     // ===== INITIALIZATION =====
     const uiManager = new UIManager();
-    const globalSummaryWidget = new AutomationSummaryWidget(uiManager, sourceDetector, statusTracker, historyManager);
 
     window.stashUIManager = uiManager;
 
     // Initialize UI after DOM is ready
     async function initializeUI() {
-        debugLog('🎯 Initializing UI...');
         const urlObj = new URL(window.location.href);
         const pathname = urlObj.pathname;
         const isSceneDetail = /\/scenes\/(\d+)/.test(pathname);
@@ -7759,22 +7757,12 @@
     // Wait for page to load
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
-            try {
-                initializeEnhancements();
-                setTimeout(initializeUI, 1000);
-            } catch (error) {
-                console.error('❌ AutomateStash initialization error:', error);
-                debugLog('Error details:', error.stack);
-            }
-        });
-    } else {
-        try {
             initializeEnhancements();
             setTimeout(initializeUI, 1000);
-        } catch (error) {
-            console.error('❌ AutomateStash initialization error:', error);
-            debugLog('Error details:', error.stack);
-        }
+        });
+    } else {
+        initializeEnhancements();
+        setTimeout(initializeUI, 1000);
     }
 
     window.uiManager = uiManager;

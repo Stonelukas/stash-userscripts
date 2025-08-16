@@ -9,13 +9,13 @@
 // @grant        GM_getValue
 // @grant        GM_deleteValue
 // @grant        GM_notification
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/config/performance-config.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/config/ui-config.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/cache-manager.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/performance-enhancer.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/ui-theme-manager.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/animation-controller.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/keyboard-shortcuts.js
+// @require      https://cdn.jsdelivr.net/gh/Stonelukas/stash-userscripts@main/scripts/config/performance-config.js
+// @require      https://cdn.jsdelivr.net/gh/Stonelukas/stash-userscripts@main/scripts/config/ui-config.js
+// @require      https://cdn.jsdelivr.net/gh/Stonelukas/stash-userscripts@main/scripts/lib/cache-manager.js
+// @require      https://cdn.jsdelivr.net/gh/Stonelukas/stash-userscripts@main/scripts/lib/performance-enhancer.js
+// @require      https://cdn.jsdelivr.net/gh/Stonelukas/stash-userscripts@main/scripts/lib/ui-theme-manager.js
+// @require      https://cdn.jsdelivr.net/gh/Stonelukas/stash-userscripts@main/scripts/lib/animation-controller.js
+// @require      https://cdn.jsdelivr.net/gh/Stonelukas/stash-userscripts@main/scripts/lib/keyboard-shortcuts.js
 // ==/UserScript==
 
 (function () {
