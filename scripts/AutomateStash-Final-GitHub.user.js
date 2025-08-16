@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AutomateStash Final Enhanced
 // @namespace    https://github.com/Stonelukas/stash-userscripts
-// @version      5.6.0
+// @version      5.8.0
 // @description  AutomateStash - with performance enhancements and post-automation summary widget
 // @author       AutomateStash Team
 // @match        http://localhost:9998/*
@@ -167,10 +167,17 @@
             }
 
             const notification = document.createElement('div');
+            // Use UI config for notification position if available
+            const positionStyle = (window.stashUIManager && window.stashUIManager.notificationConfig && window.stashUIManager.notificationConfig.position) ||
+                                  { top: '20px', right: '20px' };
+            
             notification.style.cssText = `
                 position: fixed;
-                top: 20px;
-                right: 20px;
+                ${positionStyle.top ? `top: ${positionStyle.top};` : ''}
+                ${positionStyle.right ? `right: ${positionStyle.right};` : ''}
+                ${positionStyle.bottom ? `bottom: ${positionStyle.bottom};` : ''}
+                ${positionStyle.left ? `left: ${positionStyle.left};` : ''}
+                ${positionStyle.transform ? `transform: ${positionStyle.transform};` : ''}
                 z-index: 10001;
                 background: ${this.getColor(type)};
                 color: white;
@@ -2958,15 +2965,23 @@
                 max-height: 80vh;
                 overflow: hidden;
                 border: 1px solid rgba(255,255,255,0.1);
+                resize: both;
+                min-width: 600px;
+                min-height: 400px;
             `;
 
-            // Header with tabs
+            // Header with tabs - make it draggable
             const header = document.createElement('div');
             header.style.cssText = `
                 padding: 20px;
                 border-bottom: 1px solid rgba(255,255,255,0.1);
                 background: rgba(0,0,0,0.2);
+                cursor: move;
+                user-select: none;
             `;
+            
+            // Make dialog draggable by the header
+            this.makeDraggable(header, dialog, 'enhanced-settings');
 
             const title = document.createElement('h2');
             title.textContent = '🚀 Enhanced Settings';
@@ -3088,12 +3103,16 @@
             // Register widget for z-index management
             this.registerWidget(dialog);
             
-            // Add animation if available
+            // Add animation if available using saved settings
             document.body.appendChild(dialog);
             if (window.animationController && window.animationController.animate) {
-                window.animationController.animate(dialog, 'fadeInScale', {
-                    duration: 300,
-                    easing: 'ease-out'
+                const savedAnimSettings = GM_getValue('widget_animations', null);
+                const animSettings = savedAnimSettings ? JSON.parse(savedAnimSettings) : {};
+                const dialogSettings = animSettings['enhanced-settings'] || { animation: 'fadeInScale', duration: 300, easing: 'ease-out' };
+                
+                window.animationController.animate(dialog, dialogSettings.animation, {
+                    duration: dialogSettings.duration,
+                    easing: dialogSettings.easing
                 });
             }
         }
@@ -3159,10 +3178,23 @@
             `;
             
             const profileSelect = profileDiv.querySelector('select');
-            profileSelect.addEventListener('change', (e) => {
+            
+            // Load saved profile on initialization
+            const savedProfile = GM_getValue('performance_profile', 'balanced');
+            if (savedProfile && profileSelect) {
+                profileSelect.value = savedProfile;
                 if (window.performanceConfigManager) {
-                    window.performanceConfigManager.applyProfile(e.target.value);
-                    notifications.show(`Applied ${e.target.value} profile`, 'success');
+                    window.performanceConfigManager.applyProfile(savedProfile);
+                }
+            }
+            
+            profileSelect.addEventListener('change', (e) => {
+                const selectedProfile = e.target.value;
+                if (window.performanceConfigManager) {
+                    window.performanceConfigManager.applyProfile(selectedProfile);
+                    // Save the selected profile
+                    GM_setValue('performance_profile', selectedProfile);
+                    notifications.show(`Applied ${selectedProfile} profile`, 'success');
                     updateScore();
                 }
             });
@@ -4215,6 +4247,8 @@
                             if (window.performanceConfigManager) {
                                 window.performanceConfigManager.set(setting.path, e.target.checked);
                                 notifications.show(`${setting.label}: ${e.target.checked ? 'Enabled' : 'Disabled'}`, 'success');
+                                // Apply the configuration immediately
+                                this.applyConfigSettings();
                             }
                         });
                     } else if (setting.type === 'slider') {
@@ -4237,6 +4271,8 @@
                             valueDisplay.textContent = e.target.value;
                             if (window.performanceConfigManager) {
                                 window.performanceConfigManager.set(setting.path, parseFloat(e.target.value));
+                                // Apply the configuration immediately
+                                this.applyConfigSettings();
                             }
                         });
                         
@@ -4256,6 +4292,8 @@
                             if (window.performanceConfigManager && !isNaN(value)) {
                                 window.performanceConfigManager.set(setting.path, value);
                                 notifications.show(`${setting.label} set to ${value}`, 'success');
+                                // Apply the configuration immediately
+                                this.applyConfigSettings();
                             }
                         });
                     }
@@ -4306,7 +4344,10 @@
                 profileBtn.addEventListener('click', () => {
                     if (window.performanceConfigManager) {
                         window.performanceConfigManager.applyProfile(profile.name);
+                        GM_setValue('performance_profile', profile.name); // Save the selected profile
                         notifications.show(`Applied ${profile.label} profile`, 'success');
+                        // Apply the configuration settings from the profile
+                        this.applyConfigSettings();
                     }
                 });
                 
@@ -5060,6 +5101,9 @@
             // Store reference to UIManager for library callbacks
             window.stashUIManager = this;
             
+            // Apply configuration settings on initialization
+            this.applyConfigSettings();
+            
             // Initialize the keyboard shortcuts library if not already initialized
             if (window.KeyboardShortcutsManager && !window.keyboardShortcuts) {
                 // Load saved shortcuts or use defaults
@@ -5100,7 +5144,7 @@
                 });
                 
                 window.keyboardShortcuts.onAction('openConfig', () => {
-                    this.openConfigDialog();
+                    this.showConfigDialog();
                 });
                 
                 window.keyboardShortcuts.onAction('showHelp', () => {
@@ -5110,29 +5154,58 @@
                 });
                 
                 window.keyboardShortcuts.onAction('applyScrapedData', () => {
-                    const applyBtn = document.querySelector('.btn-primary[title*="Apply"]');
-                    if (applyBtn) applyBtn.click();
+                    const applyBtn = this.findApplyButton();
+                    if (applyBtn) {
+                        applyBtn.click();
+                        notifications.show('✅ Applied scraped data', 'success');
+                    } else {
+                        notifications.show('⚠️ No Apply button found', 'warning');
+                    }
                 });
                 
-                window.keyboardShortcuts.onAction('saveScene', () => {
-                    const saveBtn = document.querySelector('.btn-primary[title*="Save"]');
-                    if (saveBtn) saveBtn.click();
+                window.keyboardShortcuts.onAction('saveScene', async () => {
+                    try {
+                        await this.saveScene();
+                        notifications.show('✅ Scene saved', 'success');
+                    } catch (error) {
+                        notifications.show('⚠️ Failed to save scene', 'warning');
+                    }
                 });
                 
-                window.keyboardShortcuts.onAction('organizeScene', () => {
-                    const organizeBtn = document.querySelector('button[title="Organized"]');
-                    if (organizeBtn) organizeBtn.click();
+                window.keyboardShortcuts.onAction('organizeScene', async () => {
+                    try {
+                        await this.organizeScene();
+                        notifications.show('✅ Scene organized', 'success');
+                    } catch (error) {
+                        notifications.show('⚠️ Failed to organize scene', 'warning');
+                    }
                 });
                 
                 window.keyboardShortcuts.onAction('scrapeStashDB', async () => {
-                    if (this.automator) {
+                    // Create an Automator instance on-demand if needed
+                    if (!this.automator) {
+                        const Automator = window.Automator || function(){};
+                        this.automator = new Automator(this);
+                    }
+                    if (this.automator && this.automator.scrapeStashDB) {
                         await this.automator.scrapeStashDB();
+                    } else {
+                        // Fallback: directly trigger StashDB scraping
+                        await this.scrapeStashDB();
                     }
                 });
                 
                 window.keyboardShortcuts.onAction('scrapeThePornDB', async () => {
-                    if (this.automator) {
+                    // Create an Automator instance on-demand if needed
+                    if (!this.automator) {
+                        const Automator = window.Automator || function(){};
+                        this.automator = new Automator(this);
+                    }
+                    if (this.automator && this.automator.scrapeThePornDB) {
                         await this.automator.scrapeThePornDB();
+                    } else {
+                        // Fallback: directly trigger ThePornDB scraping
+                        await this.scrapeThePornDB();
                     }
                 });
                 
@@ -5140,11 +5213,15 @@
                     if (window.themeManager) {
                         const allThemes = window.themeManager.getAllThemes();
                         const themeNames = Object.keys(allThemes).filter(name => name !== 'system');
-                        const currentIndex = themeNames.indexOf(window.themeManager.currentTheme);
+                        const currentTheme = window.themeManager.currentTheme || 'dark';
+                        const currentIndex = themeNames.indexOf(currentTheme);
                         const nextIndex = (currentIndex + 1) % themeNames.length;
                         const nextTheme = themeNames[nextIndex];
                         window.themeManager.applyTheme(nextTheme);
+                        GM_setValue('ui_theme', nextTheme); // Save the theme preference
                         notifications.show(`Theme switched to ${allThemes[nextTheme].name}`, 'success');
+                        // Apply theme to all widgets
+                        this.applyThemeToAllWidgets();
                     }
                 });
                 
@@ -5156,9 +5233,12 @@
                 });
                 
                 window.keyboardShortcuts.onAction('toggleDebugMode', () => {
-                    const currentDebug = GM_getValue('debugMode', false);
-                    GM_setValue('debugMode', !currentDebug);
+                    const currentDebug = getConfig(CONFIG.DEBUG);
+                    setConfig(CONFIG.DEBUG, !currentDebug);
                     notifications.show(`Debug mode ${!currentDebug ? 'enabled' : 'disabled'}`, 'success');
+                    // Update checkbox if settings dialog is open
+                    const checkbox = document.querySelector('input[type="checkbox"][data-key="debugMode"]');
+                    if (checkbox) checkbox.checked = !currentDebug;
                 });
                 
                 // Additional UI Actions
@@ -5410,15 +5490,212 @@
                     const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
                     if (typing) return;
                     
-                    // Only handle ESC for cancel as a fallback
-                    if (e.key === 'Escape' && this.automationInProgress) {
+                    // Handle ESC key for multiple purposes
+                    if (e.key === 'Escape') {
                         e.preventDefault();
-                        this.cancelAutomation();
+                        
+                        // Close any open dialogs first
+                        const dialogs = [
+                            '#enhanced-settings-dialog',
+                            '#stash-config-dialog',
+                            '#stash-config-backdrop',
+                            '.keyboard-help-dialog'
+                        ];
+                        
+                        let dialogClosed = false;
+                        dialogs.forEach(selector => {
+                            const dialog = document.querySelector(selector);
+                            if (dialog) {
+                                dialog.remove();
+                                dialogClosed = true;
+                            }
+                        });
+                        
+                        // If no dialog was closed and automation is running, cancel it
+                        if (!dialogClosed && this.automationInProgress) {
+                            this.cancelAutomation();
+                        }
                     }
                 }, true);
             }
         }
 
+        // Method to apply UI configuration settings
+        applyUIConfigSettings() {
+            if (!window.uiConfig) return;
+            
+            const config = window.uiConfig.getConfig();
+            
+            // Apply notification settings
+            if (config.notifications) {
+                const notifPositions = {
+                    'top-right': { top: '20px', right: '20px', bottom: 'auto', left: 'auto' },
+                    'top-left': { top: '20px', left: '20px', bottom: 'auto', right: 'auto' },
+                    'bottom-right': { bottom: '20px', right: '20px', top: 'auto', left: 'auto' },
+                    'bottom-left': { bottom: '20px', left: '20px', top: 'auto', right: 'auto' },
+                    'center': { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
+                };
+                
+                // Store notification config for use in notification system
+                this.notificationConfig = {
+                    ...config.notifications,
+                    position: notifPositions[config.notifications.position] || notifPositions['top-right']
+                };
+            }
+            
+            // Apply panel settings
+            if (config.panel && this.panel) {
+                if (config.panel.opacity) {
+                    this.panel.style.opacity = config.panel.opacity;
+                }
+                if (config.panel.startMinimized && !this.isMinimized) {
+                    this.minimize();
+                }
+            }
+            
+            // Apply dialog settings
+            this.dialogConfig = config.dialogs || {};
+            
+            // Apply button settings
+            this.buttonConfig = config.buttons || {};
+            
+            // Apply automation settings
+            if (config.automation) {
+                setConfig(CONFIG.MINIMIZE_WHEN_COMPLETE, config.automation.minimizeOnComplete);
+                setConfig(CONFIG.SHOW_NOTIFICATIONS, config.notifications.enabled);
+            }
+        }
+        
+        // Method to apply configuration settings to operations
+        applyConfigSettings() {
+            if (!window.performanceConfigManager) return;
+            
+            // Apply monitoring settings
+            const monitoringEnabled = window.performanceConfigManager.get('monitoring.enabled');
+            if (window.performanceMonitor && monitoringEnabled !== undefined) {
+                window.performanceMonitor.enabled = monitoringEnabled;
+            }
+            
+            // Apply cache settings
+            const cacheEnabled = window.performanceConfigManager.get('cache.enabled');
+            if (window.cacheManager && cacheEnabled !== undefined) {
+                window.cacheManager.enabled = cacheEnabled;
+            }
+            
+            // Apply DOM batching settings
+            const batchingEnabled = window.performanceConfigManager.get('dom.batchingEnabled');
+            if (window.domBatchProcessor && batchingEnabled !== undefined) {
+                window.domBatchProcessor.enabled = batchingEnabled;
+            }
+            
+            // Apply network settings
+            const requestBatching = window.performanceConfigManager.get('network.requestBatching');
+            const requestDeduplication = window.performanceConfigManager.get('network.requestDeduplication');
+            if (window.graphQLClient) {
+                if (requestBatching !== undefined) {
+                    window.graphQLClient.batchingEnabled = requestBatching;
+                }
+                if (requestDeduplication !== undefined) {
+                    window.graphQLClient.deduplicationEnabled = requestDeduplication;
+                }
+            }
+            
+            // Apply debug settings
+            const debugEnabled = window.performanceConfigManager.get('debug.enabled');
+            if (debugEnabled !== undefined) {
+                setConfig(CONFIG.DEBUG, debugEnabled);
+            }
+            
+            // Apply memory settings
+            const memoryMonitoring = window.performanceConfigManager.get('memory.monitoringEnabled');
+            const autoCleanup = window.performanceConfigManager.get('memory.autoCleanup');
+            if (window.memoryMonitor) {
+                if (memoryMonitoring !== undefined) {
+                    window.memoryMonitor.enabled = memoryMonitoring;
+                }
+                if (autoCleanup !== undefined) {
+                    window.memoryMonitor.autoCleanup = autoCleanup;
+                }
+            }
+        }
+        
+        // Add method to apply theme to all widgets
+        applyThemeToAllWidgets() {
+            if (!window.themeManager) return;
+            
+            const currentTheme = window.themeManager.currentTheme || 'dark';
+            const themeColors = {
+                dark: {
+                    background: 'linear-gradient(135deg, #1e2936 0%, #2c3e50 100%)',
+                    text: '#ecf0f1',
+                    border: 'rgba(255,255,255,0.1)'
+                },
+                light: {
+                    background: 'linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%)',
+                    text: '#2c3e50',
+                    border: 'rgba(0,0,0,0.1)'
+                },
+                midnight: {
+                    background: 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)',
+                    text: '#ffffff',
+                    border: 'rgba(255,255,255,0.15)'
+                },
+                ocean: {
+                    background: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)',
+                    text: '#ffffff',
+                    border: 'rgba(255,255,255,0.2)'
+                }
+            };
+            
+            const colors = themeColors[currentTheme] || themeColors.dark;
+            
+            // Apply to all dialogs and widgets
+            const widgets = [
+                '#enhanced-settings-dialog',
+                '#stash-config-dialog',
+                '#automation-summary-widget',
+                '#performance-widget',
+                '.stash-notification'
+            ];
+            
+            widgets.forEach(selector => {
+                const elements = document.querySelectorAll(selector);
+                elements.forEach(el => {
+                    if (el.style) {
+                        el.style.background = colors.background;
+                        el.style.color = colors.text;
+                        el.style.borderColor = colors.border;
+                    }
+                });
+            });
+        }
+        
+        // Add the missing cancelAutomation method
+        cancelAutomation() {
+            this.automationCancelled = true;
+            this.automationInProgress = false;
+            this.summaryWidget && this.summaryWidget.addWarning('Automation cancelled by user');
+            this.updateSceneStatus('🛑 Automation cancelled');
+            notifications.show('🛑 Automation cancelled', 'warning');
+            this.hideCancelButton();
+            this.hideSkipButton();
+            
+            // Reset automation button state if it exists
+            if (this.startButton) {
+                this.startButton.disabled = false;
+                this.startButton.innerHTML = '<strong>🚀 Start Automation</strong>';
+                this.startButton.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                this.startButton.style.cursor = 'pointer';
+            }
+            
+            // Close any open modals (like scraper confirmation)
+            const modals = document.querySelectorAll('.modal.show, .modal.fade.show');
+            modals.forEach(modal => {
+                const closeBtn = modal.querySelector('.close, .btn-secondary, button[data-dismiss="modal"]');
+                if (closeBtn) closeBtn.click();
+            });
+        }
+        
         showShortcutHelp() {
             const map = { ...DEFAULTS[CONFIG.SHORTCUT_MAP], ...(getConfig(CONFIG.SHORTCUT_MAP) || {}) };
             const wrap = document.createElement('div');
@@ -5718,11 +5995,15 @@
 
             document.body.appendChild(this.panel);
             
-            // Apply animation if available
+            // Apply animation if available using saved settings
             if (window.animationController && window.animationController.animate) {
-                window.animationController.animate(this.panel, 'fadeInUp', {
-                    duration: 300,
-                    easing: 'ease-out'
+                const savedAnimSettings = GM_getValue('widget_animations', null);
+                const animSettings = savedAnimSettings ? JSON.parse(savedAnimSettings) : {};
+                const panelSettings = animSettings['main-panel'] || { animation: 'fadeInUp', duration: 300, easing: 'ease-out' };
+                
+                window.animationController.animate(this.panel, panelSettings.animation, {
+                    duration: panelSettings.duration,
+                    easing: panelSettings.easing
                 });
             }
             
@@ -8198,10 +8479,7 @@
                 // Handle cancel click
                 this.cancelButton.onclick = () => {
                     if (confirm('Are you sure you want to cancel the automation?')) {
-                        this.automationCancelled = true;
-                        this.summaryWidget.addWarning('Automation cancelled by user');
-                        this.updateSceneStatus('🛑 Cancelling automation...');
-                        notifications.show('🛑 Automation cancelled by user', 'warning');
+                        this.cancelAutomation();
                     }
                 };
 
@@ -10049,6 +10327,16 @@
     // Initialize performance enhancements if available
     function initializeEnhancements() {
         debugLog('🔍 Checking for performance enhancements...');
+        
+        // Initialize UI configuration if available
+        if (window.UIConfig && !window.uiConfig) {
+            window.uiConfig = new window.UIConfig();
+            debugLog('✅ UI configuration initialized');
+            // Apply UI settings if UI manager exists
+            if (window.stashUIManager && window.stashUIManager.applyUIConfigSettings) {
+                window.stashUIManager.applyUIConfigSettings();
+            }
+        }
 
         // Check if cache manager is available (already initialized by library)
         if (window.cacheManager) {
@@ -10076,9 +10364,14 @@
                 window.themeManager.initialize();
             }
             debugLog('✅ Theme manager available');
-            // Apply dark theme by default for Stash
+            // Apply saved theme or default to dark theme
+            const savedTheme = GM_getValue('ui_theme', 'dark');
             if (window.themeManager.applyTheme) {
-                window.themeManager.applyTheme('dark');
+                window.themeManager.applyTheme(savedTheme);
+                // Apply theme to all existing widgets
+                if (window.stashUIManager && window.stashUIManager.applyThemeToAllWidgets) {
+                    window.stashUIManager.applyThemeToAllWidgets();
+                }
             }
         }
 

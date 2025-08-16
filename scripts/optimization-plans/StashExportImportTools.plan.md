@@ -41,3 +41,4 @@ function loadCheckpoint(key){ try{ return JSON.parse(GM_getValue(key,'{}')); }ca
 
 
 
+
