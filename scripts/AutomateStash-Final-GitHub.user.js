@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AutomateStash Final Enhanced
 // @namespace    https://github.com/Stonelukas/stash-userscripts
-// @version      5.0.1
+// @version      5.0.2
 // @description  AutomateStash - with performance enhancements and post-automation summary widget
 // @author       AutomateStash Team
 // @match        http://localhost:9998/*
@@ -2860,9 +2860,10 @@
             };
 
             // Initialize enhanced status tracking components
-            this.sourceDetector = new SourceDetector();
-            this.statusTracker = new StatusTracker(this.sourceDetector);
-            this.historyManager = new HistoryManager();
+            // Use global instances if available, otherwise create new ones
+            this.sourceDetector = window.sourceDetector || new SourceDetector();
+            this.statusTracker = window.statusTracker || new StatusTracker(this.sourceDetector);
+            this.historyManager = window.historyManager || new HistoryManager();
 
             // Initialize automation summary widget (will be created when DOM is ready)
             this.summaryWidget = null;
@@ -7684,10 +7685,22 @@
     }
 
     // ===== INITIALIZATION =====
+    // Create core components first
+    const sourceDetector = new SourceDetector();
+    const statusTracker = new StatusTracker(sourceDetector);
+    const historyManager = new HistoryManager();
+    
+    // Create UI manager
     const uiManager = new UIManager();
+    
+    // Create global summary widget
     const globalSummaryWidget = new AutomationSummaryWidget(uiManager, sourceDetector, statusTracker, historyManager);
 
+    // Make available globally
     window.stashUIManager = uiManager;
+    window.sourceDetector = sourceDetector;
+    window.statusTracker = statusTracker;
+    window.historyManager = historyManager;
 
     // Initialize UI after DOM is ready
     async function initializeUI() {
