@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AutomateStash Final Enhanced
 // @namespace    https://github.com/Stonelukas/stash-userscripts
-// @version      5.0.2
+// @version      5.0.3
 // @description  AutomateStash - with performance enhancements and post-automation summary widget
 // @author       AutomateStash Team
 // @match        http://localhost:9998/*
@@ -117,7 +117,7 @@
         // Thumbnail comparison defaults
         [CONFIG.PREFER_HIGHER_RES_THUMBNAILS]: true,
         // Diagnostics
-        [CONFIG.DEBUG]: false,
+        [CONFIG.DEBUG]: true,
         // Fast click + waits
         [CONFIG.FAST_CLICK_SCROLL]: true,
         [CONFIG.VISIBLE_WAIT_TIMEOUT_MS]: 4000,
@@ -7689,10 +7689,10 @@
     const sourceDetector = new SourceDetector();
     const statusTracker = new StatusTracker(sourceDetector);
     const historyManager = new HistoryManager();
-    
+
     // Create UI manager
     const uiManager = new UIManager();
-    
+
     // Create global summary widget
     const globalSummaryWidget = new AutomationSummaryWidget(uiManager, sourceDetector, statusTracker, historyManager);
 
@@ -7735,37 +7735,58 @@
     // Initialize performance enhancements if available
     function initializeEnhancements() {
         debugLog('🔍 Checking for performance enhancements...');
-        
-        // Initialize cache manager
-        if (typeof CacheManager !== 'undefined') {
-            window.cacheManager = new CacheManager();
-            debugLog('✅ Cache manager initialized');
+
+        // Check if cache manager is available (already initialized by library)
+        if (window.cacheManager) {
+            debugLog('✅ Cache manager available');
         }
-        
-        // Initialize performance monitor
-        if (typeof PerformanceEnhancer !== 'undefined') {
-            window.performanceMonitor = new PerformanceEnhancer();
-            debugLog('✅ Performance monitoring enabled');
+
+        // Check if performance monitor is available (already initialized by library)
+        if (window.performanceMonitor) {
+            debugLog('✅ Performance monitoring available');
         }
-        
-        // Initialize theme manager
-        if (typeof ThemeManager !== 'undefined') {
-            window.themeManager = new ThemeManager();
-            window.themeManager.initialize();
-            debugLog('✅ Theme manager initialized');
+
+        // Check if theme manager is available (already initialized by library)
+        if (window.themeManager) {
+            // Theme manager might need initialization
+            if (window.themeManager.initialize) {
+                window.themeManager.initialize();
+            }
+            debugLog('✅ Theme manager available');
         }
-        
-        // Initialize keyboard shortcuts
-        if (typeof KeyboardShortcutHandler !== 'undefined') {
-            window.keyboardHandler = new KeyboardShortcutHandler();
-            window.keyboardHandler.initialize();
-            debugLog('✅ Keyboard shortcuts enabled');
+
+        // Check if keyboard shortcuts are available (already initialized by library)
+        if (window.keyboardShortcuts) {
+            // Keyboard shortcuts might need initialization
+            if (window.keyboardShortcuts.initialize) {
+                window.keyboardShortcuts.initialize();
+            }
+            debugLog('✅ Keyboard shortcuts available');
         }
-        
-        // Initialize animation controller
-        if (typeof AnimationController !== 'undefined') {
-            window.animationController = new AnimationController();
-            debugLog('✅ Animation controller initialized');
+
+        // Check if animation controller is available (already initialized by library)
+        if (window.animationController) {
+            debugLog('✅ Animation controller available');
+        }
+
+        // Check for performance config manager
+        if (window.performanceConfigManager) {
+            debugLog('✅ Performance configuration available');
+        }
+
+        // Summary of available enhancements
+        const enhancements = [];
+        if (window.cacheManager) enhancements.push('Caching');
+        if (window.performanceMonitor) enhancements.push('Performance');
+        if (window.themeManager) enhancements.push('Themes');
+        if (window.keyboardShortcuts) enhancements.push('Keyboard');
+        if (window.animationController) enhancements.push('Animations');
+        if (window.performanceConfigManager) enhancements.push('Config');
+
+        if (enhancements.length > 0) {
+            debugLog(`🚀 Enhanced mode active with: ${enhancements.join(', ')}`);
+        } else {
+            debugLog('⚠️ Running in standard mode (no enhancements detected)');
         }
     }
 
