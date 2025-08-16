@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AutomateStash Final Enhanced
 // @namespace    https://github.com/Stonelukas/stash-userscripts
-// @version      5.2.0
+// @version      5.4.0
 // @description  AutomateStash - with performance enhancements and post-automation summary widget
 // @author       AutomateStash Team
 // @match        http://localhost:9998/*
@@ -2873,6 +2873,11 @@
                 rescrapeStashDB: false,
                 rescrapeThePornDB: false
             };
+            
+            // Z-index management for widgets
+            this.baseZIndex = 10000;
+            this.topZIndex = 10000;
+            this.widgets = new Map();
 
             // Initialize enhanced status tracking components
             // Use global instances if available, otherwise create new ones
@@ -3381,16 +3386,75 @@
             title.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
             container.appendChild(title);
 
-            const shortcuts = [
-                { key: 'Ctrl+Shift+A', action: 'Start Automation', category: 'Automation' },
-                { key: 'Ctrl+Shift+S', action: 'Open Settings', category: 'UI' },
-                { key: 'Escape', action: 'Cancel Automation', category: 'Automation' },
-                { key: 'Ctrl+Shift+M', action: 'Minimize Panel', category: 'UI' },
-                { key: 'Ctrl+Shift+E', action: 'Expand Panel', category: 'UI' },
-                { key: 'Ctrl+Shift+H', action: 'Show Health Dashboard', category: 'UI' },
-                { key: 'Ctrl+Shift+C', action: 'Clear Cache', category: 'Performance' },
-                { key: 'Ctrl+Shift+P', action: 'Performance Metrics', category: 'Performance' }
-            ];
+            // Get actual shortcuts from the library
+            let shortcuts = [];
+            if (window.keyboardShortcuts && window.keyboardShortcuts.getShortcuts) {
+                shortcuts = window.keyboardShortcuts.getShortcuts();
+            } else if (window.KeyboardShortcutsManager) {
+                // Use the library's default shortcuts directly
+                const manager = new window.KeyboardShortcutsManager();
+                shortcuts = Object.entries(manager.defaultShortcuts).map(([key, info]) => ({
+                    key,
+                    originalKey: key,
+                    action: info.action,
+                    description: info.description,
+                    context: info.context
+                }));
+            } else {
+                // Fallback
+                shortcuts = [
+                    { key: 'Alt+r', originalKey: 'Alt+r', action: 'startAutomation', description: 'Start automation', context: 'global' },
+                    { key: 'Alt+Shift+r', originalKey: 'Alt+Shift+r', action: 'startAutomationSilent', description: 'Start silent automation', context: 'global' },
+                    { key: 'Alt+m', originalKey: 'Alt+m', action: 'toggleMinimize', description: 'Toggle minimize panel', context: 'global' },
+                    { key: 'Alt+c', originalKey: 'Alt+c', action: 'openConfig', description: 'Open configuration', context: 'global' },
+                    { key: 'Alt+h', originalKey: 'Alt+h', action: 'showHelp', description: 'Show help', context: 'global' },
+                    { key: 'Escape', originalKey: 'Escape', action: 'cancelAutomation', description: 'Cancel automation', context: 'automation' },
+                    { key: 'Alt+a', originalKey: 'Alt+a', action: 'applyScrapedData', description: 'Apply scraped data', context: 'edit' },
+                    { key: 'Alt+s', originalKey: 'Alt+s', action: 'saveScene', description: 'Save scene', context: 'edit' },
+                    { key: 'Alt+o', originalKey: 'Alt+o', action: 'organizeScene', description: 'Mark as organized', context: 'edit' },
+                    { key: 'Alt+1', originalKey: 'Alt+1', action: 'scrapeStashDB', description: 'Scrape StashDB', context: 'edit' },
+                    { key: 'Alt+2', originalKey: 'Alt+2', action: 'scrapeThePornDB', description: 'Scrape ThePornDB', context: 'edit' },
+                    { key: 'Alt+Left', originalKey: 'Alt+Left', action: 'previousScene', description: 'Previous scene', context: 'global' },
+                    { key: 'Alt+Right', originalKey: 'Alt+Right', action: 'nextScene', description: 'Next scene', context: 'global' },
+                    { key: 'Alt+e', originalKey: 'Alt+e', action: 'openEditPanel', description: 'Open edit panel', context: 'global' },
+                    { key: 'Alt+q', originalKey: 'Alt+q', action: 'closeEditPanel', description: 'Close edit panel', context: 'edit' },
+                    { key: 'Alt+p', originalKey: 'Alt+p', action: 'togglePerformanceMonitor', description: 'Toggle performance monitor', context: 'global' },
+                    { key: 'Alt+d', originalKey: 'Alt+d', action: 'toggleDebugMode', description: 'Toggle debug mode', context: 'global' },
+                    { key: 'Alt+t', originalKey: 'Alt+t', action: 'toggleTheme', description: 'Toggle theme', context: 'global' }
+                ];
+            }
+
+            // Add and Edit buttons
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.cssText = 'margin-bottom: 15px; display: flex; gap: 10px;';
+            
+            const addBtn = document.createElement('button');
+            addBtn.textContent = '+ Add Shortcut';
+            addBtn.style.cssText = `
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 14px;
+            `;
+            
+            const resetBtn = document.createElement('button');
+            resetBtn.textContent = 'Reset to Defaults';
+            resetBtn.style.cssText = `
+                background: rgba(255,255,255,0.2);
+                color: white;
+                border: 1px solid rgba(255,255,255,0.3);
+                padding: 8px 16px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 14px;
+            `;
+            
+            buttonContainer.appendChild(addBtn);
+            buttonContainer.appendChild(resetBtn);
+            container.appendChild(buttonContainer);
 
             const table = document.createElement('table');
             table.style.cssText = `
@@ -3403,32 +3467,150 @@
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.2);">
                     <th style="text-align: left; padding: 10px; color: #ecf0f1;">Shortcut</th>
                     <th style="text-align: left; padding: 10px; color: #ecf0f1;">Action</th>
-                    <th style="text-align: left; padding: 10px; color: #ecf0f1;">Category</th>
+                    <th style="text-align: left; padding: 10px; color: #ecf0f1;">Context</th>
+                    <th style="text-align: center; padding: 10px; color: #ecf0f1;">Actions</th>
                 </tr>
             `;
             table.appendChild(thead);
             
             const tbody = document.createElement('tbody');
-            shortcuts.forEach(shortcut => {
-                const row = document.createElement('tr');
-                row.style.cssText = 'border-bottom: 1px solid rgba(255,255,255,0.1);';
-                row.innerHTML = `
-                    <td style="padding: 10px;">
-                        <kbd style="
-                            background: rgba(255,255,255,0.2);
-                            padding: 3px 6px;
-                            border-radius: 3px;
-                            font-family: monospace;
-                            color: #ecf0f1;
-                        ">${shortcut.key}</kbd>
-                    </td>
-                    <td style="padding: 10px; color: #95a5a6;">${shortcut.action}</td>
-                    <td style="padding: 10px; color: #95a5a6;">${shortcut.category}</td>
-                `;
-                tbody.appendChild(row);
-            });
-            table.appendChild(tbody);
+            tbody.id = 'keyboard-shortcuts-tbody';
             
+            // Function to render shortcuts
+            const renderShortcuts = () => {
+                tbody.innerHTML = '';
+                shortcuts.forEach((shortcut, index) => {
+                    const row = document.createElement('tr');
+                    row.style.cssText = 'border-bottom: 1px solid rgba(255,255,255,0.1);';
+                    row.innerHTML = `
+                        <td style="padding: 10px;">
+                            <input type="text" value="${shortcut.key}" 
+                                data-index="${index}"
+                                class="shortcut-key-input"
+                                style="
+                                    background: rgba(255,255,255,0.1);
+                                    border: 1px solid rgba(255,255,255,0.2);
+                                    color: #ecf0f1;
+                                    padding: 4px 8px;
+                                    border-radius: 4px;
+                                    font-family: monospace;
+                                    width: 120px;
+                                " />
+                        </td>
+                        <td style="padding: 10px; color: #95a5a6;">${shortcut.description || shortcut.action}</td>
+                        <td style="padding: 10px; color: #95a5a6;">${shortcut.context || 'global'}</td>
+                        <td style="padding: 10px; text-align: center;">
+                            <button class="edit-shortcut-btn" data-index="${index}" style="
+                                background: rgba(255,255,255,0.2);
+                                border: none;
+                                color: white;
+                                padding: 4px 8px;
+                                border-radius: 4px;
+                                cursor: pointer;
+                                margin-right: 5px;
+                            ">Save</button>
+                            <button class="delete-shortcut-btn" data-index="${index}" style="
+                                background: rgba(231, 76, 60, 0.8);
+                                border: none;
+                                color: white;
+                                padding: 4px 8px;
+                                border-radius: 4px;
+                                cursor: pointer;
+                            ">×</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+                // Add event listeners for edit buttons
+                tbody.querySelectorAll('.edit-shortcut-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const index = parseInt(e.target.dataset.index);
+                        const input = tbody.querySelector(`.shortcut-key-input[data-index="${index}"]`);
+                        const newKey = input.value.trim();
+                        
+                        if (newKey && window.keyboardShortcuts) {
+                            const shortcut = shortcuts[index];
+                            // Unregister old shortcut
+                            if (window.keyboardShortcuts.unregisterShortcut) {
+                                window.keyboardShortcuts.unregisterShortcut(shortcut.originalKey || shortcut.key);
+                            }
+                            // Register new shortcut
+                            if (window.keyboardShortcuts.registerShortcut) {
+                                window.keyboardShortcuts.registerShortcut(newKey, shortcut.action, shortcut.description, shortcut.context);
+                                shortcut.key = newKey;
+                                shortcut.originalKey = newKey;
+                            }
+                            notifications.show(`Shortcut updated: ${newKey}`, 'success');
+                        }
+                    });
+                });
+                
+                // Add event listeners for delete buttons
+                tbody.querySelectorAll('.delete-shortcut-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const index = parseInt(e.target.dataset.index);
+                        const shortcut = shortcuts[index];
+                        
+                        if (window.keyboardShortcuts && window.keyboardShortcuts.unregisterShortcut) {
+                            window.keyboardShortcuts.unregisterShortcut(shortcut.originalKey || shortcut.key);
+                        }
+                        
+                        shortcuts.splice(index, 1);
+                        renderShortcuts();
+                        notifications.show('Shortcut removed', 'info');
+                    });
+                });
+            };
+            
+            // Initial render
+            renderShortcuts();
+            
+            // Add button event listener
+            addBtn.addEventListener('click', () => {
+                const newShortcut = {
+                    key: 'Ctrl+Shift+?',
+                    originalKey: 'Ctrl+Shift+?',
+                    action: 'customAction',
+                    description: 'Custom Action',
+                    context: 'global'
+                };
+                shortcuts.push(newShortcut);
+                renderShortcuts();
+                notifications.show('New shortcut added - edit to customize', 'info');
+            });
+            
+            // Reset button event listener
+            resetBtn.addEventListener('click', () => {
+                if (window.keyboardShortcuts && window.KeyboardShortcutsManager) {
+                    // Clear all current shortcuts
+                    shortcuts.forEach(s => {
+                        if (window.keyboardShortcuts.unregisterShortcut) {
+                            window.keyboardShortcuts.unregisterShortcut(s.originalKey || s.key);
+                        }
+                    });
+                    
+                    // Re-initialize with defaults
+                    const manager = new window.KeyboardShortcutsManager();
+                    shortcuts = Object.entries(manager.defaultShortcuts).map(([key, info]) => {
+                        // Register the default shortcut
+                        if (window.keyboardShortcuts.registerShortcut) {
+                            window.keyboardShortcuts.registerShortcut(key, info.action, info.description, info.context);
+                        }
+                        return {
+                            key,
+                            originalKey: key,
+                            action: info.action,
+                            description: info.description,
+                            context: info.context
+                        };
+                    });
+                    renderShortcuts();
+                    notifications.show('Shortcuts reset to defaults', 'success');
+                }
+            });
+            
+            table.appendChild(tbody);
             container.appendChild(table);
 
             return container;
@@ -3607,24 +3789,121 @@
                 const suggestions = window.performanceConfigManager ? 
                     window.performanceConfigManager.getOptimizationSuggestions() : [];
                 
-                let html = '<h4 style="color: #ecf0f1; margin-bottom: 10px;">Optimization Suggestions</h4>';
+                suggestionsDiv.innerHTML = '<h4 style="color: #ecf0f1; margin-bottom: 10px;">Optimization Suggestions</h4>';
                 
                 if (suggestions.length > 0) {
-                    suggestions.forEach(suggestion => {
+                    suggestions.forEach((suggestion, index) => {
                         const color = suggestion.priority === 'high' ? '#e74c3c' : 
                                      suggestion.priority === 'medium' ? '#f39c12' : '#95a5a6';
-                        html += `
-                            <div style="margin-bottom: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px;">
-                                <div style="color: ${color}; font-weight: bold;">${suggestion.message}</div>
-                                <div style="color: #95a5a6; font-size: 12px; margin-top: 5px;">${suggestion.action}</div>
-                            </div>
+                        
+                        const suggestionDiv = document.createElement('div');
+                        suggestionDiv.style.cssText = 'margin-bottom: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px;';
+                        
+                        // Create apply button for each suggestion
+                        let applyButton = '';
+                        let actionFunction = null;
+                        
+                        if (suggestion.message.includes('Low cache hit rate')) {
+                            applyButton = `<button class="apply-suggestion-btn" data-action="increase-cache" style="
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                color: white;
+                                border: none;
+                                padding: 6px 12px;
+                                border-radius: 4px;
+                                cursor: pointer;
+                                font-size: 12px;
+                                margin-top: 8px;
+                            ">Apply Cache Optimization</button>`;
+                        } else if (suggestion.message.includes('High memory usage')) {
+                            applyButton = `<button class="apply-suggestion-btn" data-action="reduce-memory" style="
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                color: white;
+                                border: none;
+                                padding: 6px 12px;
+                                border-radius: 4px;
+                                cursor: pointer;
+                                font-size: 12px;
+                                margin-top: 8px;
+                            ">Apply Memory Optimization</button>`;
+                        } else if (suggestion.message.includes('High execution times')) {
+                            applyButton = `<button class="apply-suggestion-btn" data-action="enable-batching" style="
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                color: white;
+                                border: none;
+                                padding: 6px 12px;
+                                border-radius: 4px;
+                                cursor: pointer;
+                                font-size: 12px;
+                                margin-top: 8px;
+                            ">Enable Performance Mode</button>`;
+                        }
+                        
+                        suggestionDiv.innerHTML = `
+                            <div style="color: ${color}; font-weight: bold;">${suggestion.message}</div>
+                            <div style="color: #95a5a6; font-size: 12px; margin-top: 5px;">${suggestion.action}</div>
+                            ${applyButton}
                         `;
+                        
+                        suggestionsDiv.appendChild(suggestionDiv);
+                        
+                        // Add event listeners to apply buttons
+                        const btn = suggestionDiv.querySelector('.apply-suggestion-btn');
+                        if (btn) {
+                            btn.addEventListener('click', (e) => {
+                                const action = e.target.dataset.action;
+                                
+                                if (action === 'increase-cache' && window.performanceConfigManager) {
+                                    // Increase cache sizes
+                                    window.performanceConfigManager.set('cache.graphql.maxSize', 400);
+                                    window.performanceConfigManager.set('cache.graphql.ttl', 900000);
+                                    window.performanceConfigManager.set('cache.scraper.maxSize', 200);
+                                    window.performanceConfigManager.set('cache.general.maxSize', 200);
+                                    
+                                    // Also adjust cache manager if available
+                                    if (window.cacheManager) {
+                                        window.cacheManager.stores.forEach((store, name) => {
+                                            store.maxSize = Math.min(store.maxSize * 1.5, 500);
+                                        });
+                                    }
+                                    
+                                    notifications.show('Cache sizes increased and TTL values adjusted', 'success');
+                                    updateSuggestions();
+                                } else if (action === 'reduce-memory' && window.performanceConfigManager) {
+                                    // Enable memory optimizations
+                                    window.performanceConfigManager.set('memory.autoCleanup', true);
+                                    window.performanceConfigManager.set('memory.cleanupThreshold', 50 * 1024 * 1024);
+                                    window.performanceConfigManager.set('cache.graphql.maxSize', 100);
+                                    window.performanceConfigManager.set('cache.dom.maxSize', 25);
+                                    
+                                    // Trigger immediate cleanup
+                                    if (window.cacheManager) {
+                                        window.cacheManager.cleanup();
+                                    }
+                                    
+                                    notifications.show('Memory optimization enabled and cache sizes reduced', 'success');
+                                    updateSuggestions();
+                                } else if (action === 'enable-batching' && window.performanceConfigManager) {
+                                    // Enable performance optimizations
+                                    window.performanceConfigManager.set('dom.batchingEnabled', true);
+                                    window.performanceConfigManager.set('taskQueue.enabled', true);
+                                    window.performanceConfigManager.set('taskQueue.defaultConcurrency', 5);
+                                    window.performanceConfigManager.set('network.requestBatching', true);
+                                    
+                                    // Apply performance profile
+                                    window.performanceConfigManager.applyProfile('performance');
+                                    
+                                    notifications.show('Performance optimizations enabled', 'success');
+                                    updateSuggestions();
+                                }
+                            });
+                        }
                     });
                 } else {
-                    html += '<div style="color: #27ae60;">✅ No optimization needed - performance is optimal!</div>';
+                    const successDiv = document.createElement('div');
+                    successDiv.style.cssText = 'color: #27ae60;';
+                    successDiv.innerHTML = '✅ No optimization needed - performance is optimal!';
+                    suggestionsDiv.appendChild(successDiv);
                 }
-                
-                suggestionsDiv.innerHTML = html;
             };
             
             updateSuggestions();
@@ -3649,14 +3928,14 @@
                 bottom: 20px;
                 left: 20px;
                 z-index: 9998;
-                background: linear-gradient(135deg, rgba(30,30,40,0.95) 0%, rgba(40,40,60,0.95) 100%);
-                border: 1px solid rgba(102,126,234,0.3);
+                background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
+                border: 2px solid rgba(255,255,255,0.1);
                 border-radius: 12px;
                 padding: 12px;
                 min-width: 200px;
                 max-width: 300px;
                 backdrop-filter: blur(10px);
-                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                box-shadow: 0 8px 32px rgba(0,0,0,0.5);
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                 font-size: 11px;
                 color: rgba(255,255,255,0.9);
@@ -3764,6 +4043,26 @@
             });
         }
 
+        /**
+         * Bring widget to front when clicked
+         */
+        bringToFront(widgetElement) {
+            this.topZIndex++;
+            widgetElement.style.zIndex = this.topZIndex;
+        }
+        
+        /**
+         * Register widget for z-index management
+         */
+        registerWidget(widgetElement, name) {
+            this.widgets.set(name, widgetElement);
+            
+            // Add click handler to bring to front
+            widgetElement.addEventListener('mousedown', () => {
+                this.bringToFront(widgetElement);
+            });
+        }
+
         updatePerformanceMetrics() {
             const container = document.getElementById('performance-metrics-content');
             if (!container) return;
@@ -3773,15 +4072,29 @@
             // Get performance stats
             if (window.performanceMonitor) {
                 const summary = window.performanceMonitor.getSummary();
+                
+                // Check if we have actual metrics
+                const hasMetrics = summary.totalMetrics > 0;
+                
                 metrics.push({
                     label: 'Avg Execution',
-                    value: summary.averageExecutionTime ? `${summary.averageExecutionTime.toFixed(1)}ms` : '0ms',
-                    color: summary.averageExecutionTime > 100 ? '#e74c3c' : '#27ae60'
+                    value: hasMetrics && summary.averageExecutionTime ? 
+                        `${summary.averageExecutionTime.toFixed(1)}ms` : 'N/A',
+                    color: !hasMetrics ? '#95a5a6' : 
+                        summary.averageExecutionTime > 100 ? '#e74c3c' : '#27ae60'
                 });
+                
                 metrics.push({
                     label: 'DOM Ops',
                     value: summary.totalDOMOperations || 0,
                     color: summary.totalDOMOperations > 50 ? '#e67e22' : '#27ae60'
+                });
+                
+                // Add total operations metric
+                metrics.push({
+                    label: 'Total Ops',
+                    value: summary.totalMetrics || 0,
+                    color: '#3498db'
                 });
             }
 
@@ -4109,48 +4422,46 @@
         }
 
         initializeShortcuts() {
-            const getMap = () => ({ ...DEFAULTS[CONFIG.SHORTCUT_MAP], ...(getConfig(CONFIG.SHORTCUT_MAP) || {}) });
-            const match = (binding, e) => {
-                if (!binding || typeof binding !== 'string') return false;
-                const parts = binding.split('+');
-                const key = parts.pop();
-                const mods = parts;
-                const needAlt = mods.some(m => /alt/i.test(m));
-                const needCtrl = mods.some(m => /ctrl|control/i.test(m));
-                const needShift = mods.some(m => /shift/i.test(m));
-                const needMeta = mods.some(m => /meta|cmd|command/i.test(m));
-                const keyLower = String(key).toLowerCase();
-                const eventKeyLower = String(e.key || '').toLowerCase();
-                const codeLower = String(e.code || '').toLowerCase();
-                const letterCode = keyLower.length === 1 && /[a-z0-9]/.test(keyLower) ? `key${keyLower}` : '';
-                const keyOk = (eventKeyLower === keyLower) || (letterCode && codeLower === letterCode);
-                return (
-                    keyOk &&
-                    (!!e.altKey === !!needAlt) && (!!e.ctrlKey === !!needCtrl) && (!!e.shiftKey === !!needShift) && (!!e.metaKey === !!needMeta)
-                );
-            };
-            window.addEventListener('keydown', (e) => {
-                if (!getConfig(CONFIG.ENABLE_KEYBOARD_SHORTCUTS)) return;
-                const t = e.target;
-                const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-                if (typing) return;
-                const map = getMap();
-                try {
-                    if (match(map.apply, e)) {
-                        e.preventDefault();
-                        // If our confirmation widget is open, activate its Apply button instead of re-opening
-                        const confirmApplyBtn = document.querySelector('#apply-scraped-data');
-                        if (confirmApplyBtn) { confirmApplyBtn.click(); return; }
-                        this.applyScrapedData();
+            // The keyboard library handles all shortcuts through action callbacks
+            // which are set up in the main initialization
+            // This method is kept for compatibility but the actual keyboard handling
+            // is done by the keyboard-shortcuts.js library
+            
+            // Store reference to UIManager for library callbacks
+            window.stashUIManager = this;
+            
+            // Set up any additional action callbacks that weren't set in main init
+            if (window.keyboardShortcuts && window.keyboardShortcuts.setActionCallback) {
+                // Helper action for showing keyboard help
+                window.keyboardShortcuts.setActionCallback('showKeyboardHelp', () => {
+                    this.showShortcutHelp();
+                });
+                
+                // Action for confirming apply when dialog is open
+                window.keyboardShortcuts.setActionCallback('confirmApply', () => {
+                    const confirmApplyBtn = document.querySelector('#apply-scraped-data');
+                    if (confirmApplyBtn) {
+                        confirmApplyBtn.click();
                     }
-                    else if (match(map.save, e)) { e.preventDefault(); this.saveScene(); }
-                    else if (match(map.organize, e)) { e.preventDefault(); this.organizeScene(); }
-                    else if (match(map.toggle, e)) { e.preventDefault(); this.isMinimized ? this.expand() : this.minimize(); }
-                    else if (match(map.help, e)) { e.preventDefault(); this.showShortcutHelp(); }
-                    else if (match(map.startRunConfirm, e)) { e.preventDefault(); const prev = getConfig(CONFIG.AUTO_APPLY_CHANGES); setConfig(CONFIG.AUTO_APPLY_CHANGES, false); this.startAutomation().finally(() => setConfig(CONFIG.AUTO_APPLY_CHANGES, prev)); }
-                    else if (match(map.startRunAuto, e)) { e.preventDefault(); const prev = getConfig(CONFIG.AUTO_APPLY_CHANGES); setConfig(CONFIG.AUTO_APPLY_CHANGES, true); this.startAutomation().finally(() => setConfig(CONFIG.AUTO_APPLY_CHANGES, prev)); }
-                } catch (_) { }
-            }, true);
+                });
+            }
+            
+            // Only set up a basic fallback for ESC if library is not available
+            if (!window.keyboardShortcuts) {
+                console.warn('Keyboard shortcuts library not available, using basic fallback');
+                window.addEventListener('keydown', (e) => {
+                    if (!getConfig(CONFIG.ENABLE_KEYBOARD_SHORTCUTS)) return;
+                    const t = e.target;
+                    const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+                    if (typing) return;
+                    
+                    // Only handle ESC for cancel as a fallback
+                    if (e.key === 'Escape' && this.automationInProgress) {
+                        e.preventDefault();
+                        this.cancelAutomation();
+                    }
+                }, true);
+            }
         }
 
         showShortcutHelp() {
@@ -8788,30 +9099,125 @@
 
         // Check if keyboard shortcuts are available (already initialized by library)
         if (window.keyboardShortcuts) {
-            // Register automation shortcuts
-            if (window.keyboardShortcuts.register) {
-                // Ctrl+Shift+A to start automation
-                window.keyboardShortcuts.register('ctrl+shift+a', () => {
+            // The library already has default shortcuts defined in defaultShortcuts
+            // We just need to set up the action callbacks for them
+            if (window.keyboardShortcuts.setActionCallback) {
+                // Map library actions to our UI manager methods
+                window.keyboardShortcuts.setActionCallback('startAutomation', () => {
                     if (window.stashUIManager && window.stashUIManager.startAutomation) {
                         window.stashUIManager.startAutomation();
                     }
-                }, 'Start automation');
+                });
                 
-                // Ctrl+Shift+S to open settings
-                window.keyboardShortcuts.register('ctrl+shift+s', () => {
-                    if (window.stashUIManager && window.stashUIManager.openSettings) {
-                        window.stashUIManager.openSettings();
+                window.keyboardShortcuts.setActionCallback('startAutomationSilent', () => {
+                    if (window.stashUIManager && window.stashUIManager.startAutomation) {
+                        window.stashUIManager.startAutomation(true); // Silent mode
                     }
-                }, 'Open settings');
+                });
                 
-                // Escape to cancel automation
-                window.keyboardShortcuts.register('escape', () => {
+                window.keyboardShortcuts.setActionCallback('toggleMinimize', () => {
+                    if (window.stashUIManager) {
+                        window.stashUIManager.isMinimized ? window.stashUIManager.expand() : window.stashUIManager.minimize();
+                    }
+                });
+                
+                window.keyboardShortcuts.setActionCallback('openConfig', () => {
+                    if (window.stashUIManager && window.stashUIManager.showConfigDialog) {
+                        window.stashUIManager.showConfigDialog();
+                    }
+                });
+                
+                window.keyboardShortcuts.setActionCallback('showHelp', () => {
+                    if (window.stashUIManager && window.stashUIManager.showHealthDashboard) {
+                        window.stashUIManager.showHealthDashboard();
+                    }
+                });
+                
+                window.keyboardShortcuts.setActionCallback('cancelAutomation', () => {
                     if (window.stashUIManager && window.stashUIManager.automationInProgress) {
                         window.stashUIManager.cancelAutomation();
                     }
-                }, 'Cancel automation');
+                });
+                
+                // Edit panel shortcuts
+                window.keyboardShortcuts.setActionCallback('applyScrapedData', () => {
+                    if (window.stashUIManager && window.stashUIManager.applyScrapedData) {
+                        window.stashUIManager.applyScrapedData();
+                    }
+                });
+                
+                window.keyboardShortcuts.setActionCallback('saveScene', () => {
+                    if (window.stashUIManager && window.stashUIManager.saveScene) {
+                        window.stashUIManager.saveScene();
+                    }
+                });
+                
+                window.keyboardShortcuts.setActionCallback('organizeScene', () => {
+                    if (window.stashUIManager && window.stashUIManager.organizeScene) {
+                        window.stashUIManager.organizeScene();
+                    }
+                });
+                
+                window.keyboardShortcuts.setActionCallback('scrapeStashDB', () => {
+                    if (window.stashUIManager && window.stashUIManager.scrapeStashDB) {
+                        window.stashUIManager.scrapeStashDB();
+                    }
+                });
+                
+                window.keyboardShortcuts.setActionCallback('scrapeThePornDB', () => {
+                    if (window.stashUIManager && window.stashUIManager.scrapeThePornDB) {
+                        window.stashUIManager.scrapeThePornDB();
+                    }
+                });
+                
+                // Navigation shortcuts
+                window.keyboardShortcuts.setActionCallback('previousScene', () => {
+                    const prevButton = document.querySelector('button[title="Previous"]');
+                    if (prevButton) prevButton.click();
+                });
+                
+                window.keyboardShortcuts.setActionCallback('nextScene', () => {
+                    const nextButton = document.querySelector('button[title="Next"]');
+                    if (nextButton) nextButton.click();
+                });
+                
+                window.keyboardShortcuts.setActionCallback('openEditPanel', () => {
+                    const editButton = document.querySelector('a[data-rb-event-key="scene-edit-panel"]');
+                    if (editButton) editButton.click();
+                });
+                
+                window.keyboardShortcuts.setActionCallback('closeEditPanel', () => {
+                    const closeButton = document.querySelector('.edit-panel button.close');
+                    if (closeButton) closeButton.click();
+                });
+                
+                // Performance shortcuts
+                window.keyboardShortcuts.setActionCallback('togglePerformanceMonitor', () => {
+                    const widget = document.getElementById('stash-performance-widget');
+                    if (widget) {
+                        widget.style.display = widget.style.display === 'none' ? 'block' : 'none';
+                    }
+                });
+                
+                window.keyboardShortcuts.setActionCallback('toggleDebugMode', () => {
+                    if (window.performanceConfigManager) {
+                        const debugMode = window.performanceConfigManager.get('debug.enabled');
+                        window.performanceConfigManager.set('debug.enabled', !debugMode);
+                        notifications.show(`Debug mode ${!debugMode ? 'enabled' : 'disabled'}`, 'info');
+                    }
+                });
+                
+                window.keyboardShortcuts.setActionCallback('toggleTheme', () => {
+                    if (window.themeManager) {
+                        const themes = window.themeManager.getAvailableThemes();
+                        const current = window.themeManager.getCurrentTheme();
+                        const nextIndex = (themes.indexOf(current) + 1) % themes.length;
+                        window.themeManager.setTheme(themes[nextIndex]);
+                        notifications.show(`Theme changed to ${themes[nextIndex]}`, 'info');
+                    }
+                });
             }
-            debugLog('✅ Keyboard shortcuts registered');
+            debugLog('✅ Keyboard shortcuts action callbacks registered');
         }
 
         // Check if animation controller is available (already initialized by library)
