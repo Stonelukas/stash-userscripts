@@ -1,0 +1,13 @@
+---
+alwaysApply: false
+description: Quick docs index for manual reference during larger refactors
+---
+## Helpful docs
+
+- Overview: [README.md](mdc:README.md)
+- Roadmap and status: [ROADMAP.md](mdc:ROADMAP.md)
+- Assistant guide: [CLAUDE.md](mdc:CLAUDE.md)
+- Architecture: [docs/ARCHITECTURE.md](mdc:docs/ARCHITECTURE.md)
+- Troubleshooting: [docs/TROUBLESHOOTING.md](mdc:docs/TROUBLESHOOTING.md)
+- Automation Playbook: [docs/AUTOMATION-PLAYBOOK.md](mdc:docs/AUTOMATION-PLAYBOOK.md)
+

@@ -37,8 +37,18 @@
         ENABLE_CROSS_SCENE_INTELLIGENCE: 'enableCrossSceneIntelligence',
         STASH_ADDRESS: 'stashAddress',
         STASH_API_KEY: 'stashApiKey',
+    // Heuristics & scheduling
+    ADAPTIVE_ROUTING: 'adaptiveRouting',
+    MIN_AUTO_APPLY_SCORE: 'minAutoApplyScore',
+    RESCRAPE_RETRY_MINUTES: 'rescrapeRetryMinutes',
         // Thumbnail comparison options
-        PREFER_HIGHER_RES_THUMBNAILS: 'preferHigherResThumbnails'
+    PREFER_HIGHER_RES_THUMBNAILS: 'preferHigherResThumbnails',
+    // Diagnostics
+    DEBUG: 'debugMode',
+        // Fast click + waits
+        FAST_CLICK_SCROLL: 'fastClickScroll',
+        VISIBLE_WAIT_TIMEOUT_MS: 'visibleWaitTimeoutMs',
+        SCRAPER_OUTCOME_TIMEOUT_MS: 'scraperOutcomeTimeoutMs'
     };
 
     const DEFAULTS = {
@@ -54,8 +64,18 @@
         [CONFIG.ENABLE_CROSS_SCENE_INTELLIGENCE]: true,
         [CONFIG.STASH_ADDRESS]: 'http://localhost:9998',
         [CONFIG.STASH_API_KEY]: '',
+    // Heuristics & scheduling defaults
+    [CONFIG.ADAPTIVE_ROUTING]: true,
+    [CONFIG.MIN_AUTO_APPLY_SCORE]: 60,
+    [CONFIG.RESCRAPE_RETRY_MINUTES]: 30,
         // Thumbnail comparison defaults
-        [CONFIG.PREFER_HIGHER_RES_THUMBNAILS]: true
+    [CONFIG.PREFER_HIGHER_RES_THUMBNAILS]: true,
+    // Diagnostics
+    [CONFIG.DEBUG]: false,
+        // Fast click + waits
+        [CONFIG.FAST_CLICK_SCROLL]: true,
+        [CONFIG.VISIBLE_WAIT_TIMEOUT_MS]: 4000,
+        [CONFIG.SCRAPER_OUTCOME_TIMEOUT_MS]: 8000
     };
 
     function getConfig(key) {
@@ -69,8 +89,20 @@
 
     // ===== NOTIFICATION SYSTEM =====
     class NotificationManager {
+        static _recent = new Map(); // message -> timestamp
+        static _dedupeMs = 5000;
         show(message, type = 'info', duration = 4000) {
             if (!getConfig(CONFIG.SHOW_NOTIFICATIONS)) return;
+
+            // Dedupe non-error messages in a short window
+            if (type !== 'error') {
+                const last = NotificationManager._recent.get(message);
+                const now = Date.now();
+                if (last && now - last < NotificationManager._dedupeMs) {
+                    return;
+                }
+                NotificationManager._recent.set(message, now);
+            }
 
             const notification = document.createElement('div');
             notification.style.cssText = `
@@ -138,6 +170,14 @@
 
     const notifications = new NotificationManager();
 
+    function debugLog(...args) {
+        try {
+            if (getConfig(CONFIG.DEBUG)) {
+                console.debug('[AutomateStash]', ...args);
+            }
+        } catch (_) {}
+    }
+
     // ===== GRAPHQL API CLIENT =====
     
     /**
@@ -149,6 +189,9 @@
             this.baseUrl = getConfig(CONFIG.STASH_ADDRESS);
             this.apiKey = getConfig(CONFIG.STASH_API_KEY);
             this.endpoint = `${this.baseUrl}${STASH_API.endpoint}`;
+            // In-flight request coalescing and short TTL cache
+            this._inflight = new Map(); // key -> Promise
+            this._cache = new Map(); // key -> { data, expiresAt }
         }
 
         /**
@@ -168,11 +211,20 @@
                     headers['ApiKey'] = this.apiKey;
                 }
 
-                const response = await fetch(this.endpoint, {
-                    method: 'POST',
-                    headers: headers,
-                    body: JSON.stringify({ query, variables })
-                });
+                const controller = new AbortController();
+                const timeoutMs = STASH_API.timeout || 10000;
+                const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+                let response;
+                try {
+                    response = await fetch(this.endpoint, {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify({ query, variables }),
+                        signal: controller.signal
+                    });
+                } finally {
+                    clearTimeout(timeoutId);
+                }
 
                 if (!response.ok) {
                     throw new Error(`GraphQL request failed: ${response.status}`);
@@ -188,6 +240,42 @@
             } catch (error) {
                 throw error;
             }
+        }
+
+        /**
+         * Cached scene details with coalescing and TTL
+         * @param {string} sceneId
+         * @param {number} ttlMs default 5000ms
+         */
+        async getSceneDetailsCached(sceneId, ttlMs = 5000) {
+            if (!sceneId) return null;
+            const key = `scene_${sceneId}`;
+
+            // Fresh cache?
+            const cached = this._cache.get(key);
+            const now = Date.now();
+            if (cached && cached.expiresAt > now) {
+                return cached.data;
+            }
+
+            // In-flight?
+            if (this._inflight.has(key)) {
+                return this._inflight.get(key);
+            }
+
+            const p = (async () => {
+                try {
+                    const data = await this.getSceneDetails(sceneId);
+                    this._cache.set(key, { data, expiresAt: now + ttlMs });
+                    return data;
+                } finally {
+                    // Clear inflight regardless of success/failure to avoid leaks
+                    this._inflight.delete(key);
+                }
+            })();
+
+            this._inflight.set(key, p);
+            return p;
         }
 
         /**
@@ -343,11 +431,25 @@
          * Detect StashDB data with confidence scoring
          * @returns {Object} Detection result with confidence level and detected data
          */
-        async detectStashDBData() {
+        async detectStashDBData(sceneDetails) {
             
             // Always try GraphQL first for most accurate results
             try {
-                const graphqlResult = await this.validateStashDBGraphQL();
+                const graphqlResult = sceneDetails
+                    ? await (async () => {
+                        // Derive without refetching when sceneDetails provided
+                        const stashdbIds = sceneDetails.stash_ids?.filter(id => id.endpoint && id.endpoint.includes('stashdb.org')) || [];
+                        return {
+                            found: stashdbIds.length > 0,
+                            data: {
+                                stash_ids: stashdbIds,
+                                scene_id: sceneDetails.id,
+                                scene_title: sceneDetails.title,
+                                last_updated: sceneDetails.updated_at
+                            }
+                        };
+                    })()
+                    : await this.validateStashDBGraphQL();
                 if (graphqlResult.found) {
                     return {
                         ...graphqlResult,
@@ -396,11 +498,30 @@
          * Detect ThePornDB data with confidence scoring
          * @returns {Object} Detection result with confidence level and detected data
          */
-        async detectThePornDBData() {
+        async detectThePornDBData(sceneDetails) {
             
             // Always try GraphQL first for most accurate results
             try {
-                const graphqlResult = await this.validateThePornDBGraphQL();
+                const graphqlResult = sceneDetails
+                    ? await (async () => {
+                        const theporndbIds = sceneDetails.stash_ids?.filter(id => 
+                            id.endpoint && (
+                                id.endpoint.includes('metadataapi.net') ||
+                                id.endpoint.includes('theporndb') ||
+                                id.endpoint.includes('tpdb')
+                            )
+                        ) || [];
+                        return {
+                            found: theporndbIds.length > 0,
+                            data: {
+                                stash_ids: theporndbIds,
+                                scene_id: sceneDetails.id,
+                                scene_title: sceneDetails.title,
+                                last_updated: sceneDetails.updated_at
+                            }
+                        };
+                    })()
+                    : await this.validateThePornDBGraphQL();
                 if (graphqlResult.found) {
                     return {
                         ...graphqlResult,
@@ -449,11 +570,13 @@
          * Detect organized status
          * @returns {Object} Detection result with confidence level
          */
-        async detectOrganizedStatus() {
+    async detectOrganizedStatus(sceneDetails) {
             
             // Always try GraphQL first for most accurate results
             try {
-                const graphqlResult = await this.validateOrganizedGraphQL();
+        const graphqlResult = sceneDetails
+            ? { found: true, organized: !!sceneDetails.organized, data: { scene_id: sceneDetails.id, scene_title: sceneDetails.title, organized: !!sceneDetails.organized, last_updated: sceneDetails.updated_at } }
+            : await this.validateOrganizedGraphQL();
                 if (graphqlResult.found) {
                     return {
                         ...graphqlResult,
@@ -665,13 +788,40 @@
         }
 
         /**
+         * Validate organized status from DOM indicators (fast, no full scan)
+         * Matches core implementation used in AutomateStash-Final.js
+         */
+        async validateOrganizedStatus() {
+            // Targeted selectors only; avoid full DOM scan
+            const selectors = [
+                'button[title="Organized"].organized-button',
+                'button[title="Organized"]',
+                'button.organized-button',
+                'input[type="checkbox"][name*="organized" i]'
+            ];
+
+            for (const sel of selectors) {
+                const el = document.querySelector(sel);
+                if (el) {
+                    return {
+                        found: true,
+                        organized: this.isElementOrganized(el),
+                        element: el
+                    };
+                }
+            }
+
+            return { found: false };
+        }
+
+        /**
          * Validate StashDB data through GraphQL API (highest confidence)
          */
-        async validateStashDBGraphQL() {
+    async validateStashDBGraphQL() {
             // Always use GraphQL for accurate detection
 
             try {
-                const sceneId = graphqlClient.getCurrentSceneId();
+        const sceneId = graphqlClient.getCurrentSceneId();
                 if (!sceneId) {
                     return { found: false, reason: 'Not on scene page' };
                 }
@@ -682,7 +832,7 @@
                     return this.cache.get(cacheKey);
                 }
 
-                const sceneDetails = await graphqlClient.getSceneDetails(sceneId);
+        const sceneDetails = await graphqlClient.getSceneDetailsCached(sceneId);
                 if (!sceneDetails) {
                     return { found: false, reason: 'Scene not found' };
                 }
@@ -715,11 +865,11 @@
         /**
          * Validate ThePornDB data through GraphQL API (highest confidence)
          */
-        async validateThePornDBGraphQL() {
+    async validateThePornDBGraphQL() {
             // Always use GraphQL for accurate detection
 
             try {
-                const sceneId = graphqlClient.getCurrentSceneId();
+        const sceneId = graphqlClient.getCurrentSceneId();
                 if (!sceneId) {
                     return { found: false, reason: 'Not on scene page' };
                 }
@@ -730,7 +880,7 @@
                     return this.cache.get(cacheKey);
                 }
 
-                const sceneDetails = await graphqlClient.getSceneDetails(sceneId);
+        const sceneDetails = await graphqlClient.getSceneDetailsCached(sceneId);
                 if (!sceneDetails) {
                     return { found: false, reason: 'Scene not found' };
                 }
@@ -767,11 +917,11 @@
         /**
          * Validate organized status through GraphQL API (highest confidence)
          */
-        async validateOrganizedGraphQL() {
+    async validateOrganizedGraphQL() {
             // Always use GraphQL for accurate detection
 
             try {
-                const sceneId = graphqlClient.getCurrentSceneId();
+        const sceneId = graphqlClient.getCurrentSceneId();
                 if (!sceneId) {
                     return { found: false, reason: 'Not on scene page' };
                 }
@@ -782,7 +932,7 @@
                     return this.cache.get(cacheKey);
                 }
 
-                const sceneDetails = await graphqlClient.getSceneDetails(sceneId);
+        const sceneDetails = await graphqlClient.getSceneDetailsCached(sceneId);
                 if (!sceneDetails) {
                     return { found: false, reason: 'Scene not found' };
                 }
@@ -881,46 +1031,285 @@
         }
 
         /**
-         * Validate organized status through UI analysis
+         * Detect current scene status across sources and organized flag
          */
-        async validateOrganizedStatus() {
-            // Look for organized-related UI elements and patterns
-            const organizedElements = document.querySelectorAll('*');
-            let organizedFound = false;
-            
-            for (const element of organizedElements) {
-                const text = element.textContent || '';
-                const attributes = element.getAttributeNames();
-                
-                // Check text content
-                if (text.toLowerCase().includes('organized') && element.children.length === 0) {
-                    const parentInput = element.closest('label')?.querySelector('input[type="checkbox"]') ||
-                                      element.parentElement?.querySelector('input[type="checkbox"]');
-                    
-                    if (parentInput) {
-                        return {
-                            found: true,
-                            organized: parentInput.checked,
-                            element: parentInput
-                        };
+        async detectCurrentStatus() {
+            try {
+                // Extract scene ID from URL
+                this.currentStatus.sceneId = this.extractSceneId();
+                this.currentStatus.url = window.location.href;
+                this.currentStatus.lastUpdate = new Date();
+
+                // Prefer a single cached GraphQL scene fetch to derive status fast
+                const sceneId = this.currentStatus.sceneId;
+                let sceneDetails = null;
+                if (sceneId) {
+                    try {
+                        sceneDetails = await graphqlClient.getSceneDetailsCached(sceneId);
+                    } catch (e) {
+                        // Fallback is handled by detectors
                     }
                 }
+
+                // Detect StashDB status
+                const stashdbResult = await this.sourceDetector.detectStashDBData(sceneDetails);
+                this.currentStatus.stashdb = {
+                    scraped: stashdbResult.found,
+                    timestamp: stashdbResult.found ? new Date() : null,
+                    confidence: stashdbResult.confidence,
+                    data: stashdbResult.data,
+                    strategy: stashdbResult.strategy
+                };
+
+                // Detect ThePornDB status
+                const theporndbResult = await this.sourceDetector.detectThePornDBData(sceneDetails);
+                this.currentStatus.theporndb = {
+                    scraped: theporndbResult.found,
+                    timestamp: theporndbResult.found ? new Date() : null,
+                    confidence: theporndbResult.confidence,
+                    data: theporndbResult.data,
+                    strategy: theporndbResult.strategy
+                };
+
+                // Detect organized status
+                const organizedResult = await this.sourceDetector.detectOrganizedStatus(sceneDetails);
+                this.currentStatus.organized = organizedResult.organized || false;
+
+                // Notify callbacks of status update
+                this.notifyStatusUpdate();
                 
-                // Check attributes
-                for (const attr of attributes) {
-                    const value = element.getAttribute(attr);
-                    if ((attr.toLowerCase().includes('organized') || value.toLowerCase().includes('organized')) &&
-                        (element.type === 'checkbox' || element.tagName === 'BUTTON')) {
-                        return {
-                            found: true,
-                            organized: this.isElementOrganized(element),
-                            element: element
-                        };
+                return this.currentStatus;
+            } catch (error) {
+                return this.currentStatus;
+            }
+        }
+
+        /**
+         * Update status for specific source
+         * @param {string} source - Source name (stashdb, theporndb, organized)
+         * @param {Object} data - Update data
+         */
+        updateStatus(source, data) {
+            
+            switch (source) {
+                case 'stashdb':
+                    this.currentStatus.stashdb = {
+                        ...this.currentStatus.stashdb,
+                        ...data,
+                        timestamp: new Date()
+                    };
+                    break;
+                case 'theporndb':
+                    this.currentStatus.theporndb = {
+                        ...this.currentStatus.theporndb,
+                        ...data,
+                        timestamp: new Date()
+                    };
+                    break;
+                case 'organized':
+                    this.currentStatus.organized = data.organized || false;
+                    break;
+                case 'automation':
+                    this.currentStatus.lastAutomation = {
+                        timestamp: new Date(),
+                        success: data.success,
+                        sourcesUsed: data.sourcesUsed || [],
+                        errors: data.errors || [],
+                        ...data
+                    };
+                    break;
+            }
+            
+            this.currentStatus.lastUpdate = new Date();
+            this.notifyStatusUpdate();
+        }
+
+        /**
+         * Get formatted status summary
+         * @returns {Object} Formatted status summary for display
+         */
+        getStatusSummary() {
+            const summary = {
+                scene: {
+                    id: this.currentStatus.sceneId,
+                    name: this.extractSceneName() || 'Unknown Scene',
+                    url: this.currentStatus.url
+                },
+                sources: {
+                    stashdb: {
+                        status: this.currentStatus.stashdb.scraped ? 'Scraped' : 'Not scraped',
+                        confidence: this.currentStatus.stashdb.confidence,
+                        strategy: this.currentStatus.stashdb.strategy,
+                        timestamp: this.currentStatus.stashdb.timestamp,
+                        icon: this.currentStatus.stashdb.scraped ? '✅' : '❌',
+                        color: this.currentStatus.stashdb.scraped ? '#28a745' : '#6c757d'
+                    },
+                    theporndb: {
+                        status: this.currentStatus.theporndb.scraped ? 'Scraped' : 'Not scraped',
+                        confidence: this.currentStatus.theporndb.confidence,
+                        strategy: this.currentStatus.theporndb.strategy,
+                        timestamp: this.currentStatus.theporndb.timestamp,
+                        icon: this.currentStatus.theporndb.scraped ? '✅' : '❌',
+                        color: this.currentStatus.theporndb.scraped ? '#28a745' : '#6c757d'
+                    }
+                },
+                organized: {
+                    status: this.currentStatus.organized ? 'Organized' : 'Not organized',
+                    icon: this.currentStatus.organized ? '✅' : '⚠️',
+                    color: this.currentStatus.organized ? '#28a745' : '#ffc107'
+                },
+                automation: {
+                    lastRun: this.currentStatus.lastAutomation?.timestamp,
+                    success: this.currentStatus.lastAutomation?.success,
+                    sourcesUsed: this.currentStatus.lastAutomation?.sourcesUsed || [],
+                    errors: this.currentStatus.lastAutomation?.errors || []
+                },
+                lastUpdate: this.currentStatus.lastUpdate
+            };
+            
+            return summary;
+        }
+
+        /**
+         * Get overall completion status
+         * @returns {Object} Overall status with percentage and recommendations
+         */
+        getCompletionStatus() {
+            let completedItems = 0;
+            let totalItems = 3; // stashdb, theporndb, organized
+            
+            if (this.currentStatus.stashdb.scraped) completedItems++;
+            if (this.currentStatus.theporndb.scraped) completedItems++;
+            if (this.currentStatus.organized) completedItems++;
+            
+            const percentage = Math.round((completedItems / totalItems) * 100);
+            
+            const recommendations = [];
+            if (!this.currentStatus.stashdb.scraped) {
+                recommendations.push('Scrape StashDB for metadata');
+            }
+            if (!this.currentStatus.theporndb.scraped) {
+                recommendations.push('Scrape ThePornDB for additional metadata');
+            }
+            if (!this.currentStatus.organized) {
+                recommendations.push('Mark scene as organized');
+            }
+            
+            return {
+                percentage,
+                completedItems,
+                totalItems,
+                status: percentage === 100 ? 'Complete' : `${completedItems}/${totalItems} completed`,
+                recommendations,
+                color: percentage === 100 ? '#28a745' : percentage >= 66 ? '#ffc107' : '#dc3545'
+            };
+        }
+
+        /**
+         * Register callback for status updates
+         * @param {Function} callback - Function to call on status updates
+         */
+        onStatusUpdate(callback) {
+            this.statusUpdateCallbacks.push(callback);
+        }
+
+        /**
+         * Remove status update callback
+         * @param {Function} callback - Callback to remove
+         */
+        removeStatusUpdateCallback(callback) {
+            const index = this.statusUpdateCallbacks.indexOf(callback);
+            if (index > -1) {
+                this.statusUpdateCallbacks.splice(index, 1);
+            }
+        }
+
+        /**
+         * Notify all callbacks of status updates
+         */
+        notifyStatusUpdate() {
+            const summary = this.getStatusSummary();
+            this.statusUpdateCallbacks.forEach(callback => {
+                try {
+                    callback(summary);
+                } catch (error) {
+                }
+            });
+        }
+
+        /**
+         * Extract scene ID from current URL
+         * @returns {string|null} Scene ID or null if not found
+         */
+        extractSceneId() {
+            const urlMatch = window.location.href.match(/\/scenes\/(\d+)/);
+            return urlMatch ? urlMatch[1] : null;
+        }
+
+        /**
+         * Extract scene name from the current page
+         * @returns {string|null} Scene name or null if not found
+         */
+        extractSceneName() {
+            // Strategy 1: Try to get from title input field in edit form
+            const titleField = document.querySelector('input[data-field="title"], input[name="title"], input[placeholder*="title" i]');
+            if (titleField && titleField.value.trim()) {
+                return titleField.value.trim();
+            }
+
+            // Strategy 2: Try to get from h1 or main title elements
+            const titleElements = [
+                'h1.scene-title',
+                'h1[data-testid="scene-title"]', 
+                '.scene-header h1',
+                'h1',
+                '.title',
+                '[data-testid="title"]'
+            ];
+
+            for (const selector of titleElements) {
+                const element = document.querySelector(selector);
+                if (element && element.textContent.trim()) {
+                    const title = element.textContent.trim();
+                    // Filter out common navigation text
+                    if (!title.includes('Scenes') && !title.includes('Edit') && title.length > 3) {
+                        return title;
                     }
                 }
             }
-            
-            return { found: false };
+
+            // Strategy 3: Try to get from document title
+            if (document.title && !document.title.includes('Stash') && !document.title.includes('localhost')) {
+                return document.title.trim();
+            }
+
+            // Strategy 4: Fallback to scene ID
+            const sceneId = this.extractSceneId();
+            return sceneId ? `Scene ${sceneId}` : 'Unknown Scene';
+        }
+
+        /**
+         * Reset status to initial state
+         */
+        reset() {
+            this.currentStatus = {
+                sceneId: null,
+                url: window.location.href,
+                stashdb: { scraped: false, timestamp: null, confidence: 0, data: null },
+                theporndb: { scraped: false, timestamp: null, confidence: 0, data: null },
+                organized: false,
+                lastAutomation: null,
+                lastUpdate: null
+            };
+            this.notifyStatusUpdate();
+        }
+
+        /**
+         * Get current status (read-only)
+         * @returns {Object} Current status object
+         */
+        getCurrentStatus() {
+            return { ...this.currentStatus };
         }
     }
 
@@ -955,8 +1344,19 @@
                 this.currentStatus.url = window.location.href;
                 this.currentStatus.lastUpdate = new Date();
 
+                // Prefer a single cached GraphQL scene fetch to derive status fast
+                const sceneId = this.currentStatus.sceneId;
+                let sceneDetails = null;
+                if (sceneId) {
+                    try {
+                        sceneDetails = await graphqlClient.getSceneDetailsCached(sceneId);
+                    } catch (e) {
+                        // Fallback is handled by detectors
+                    }
+                }
+
                 // Detect StashDB status
-                const stashdbResult = await this.sourceDetector.detectStashDBData();
+                const stashdbResult = await this.sourceDetector.detectStashDBData(sceneDetails);
                 this.currentStatus.stashdb = {
                     scraped: stashdbResult.found,
                     timestamp: stashdbResult.found ? new Date() : null,
@@ -966,7 +1366,7 @@
                 };
 
                 // Detect ThePornDB status
-                const theporndbResult = await this.sourceDetector.detectThePornDBData();
+                const theporndbResult = await this.sourceDetector.detectThePornDBData(sceneDetails);
                 this.currentStatus.theporndb = {
                     scraped: theporndbResult.found,
                     timestamp: theporndbResult.found ? new Date() : null,
@@ -976,7 +1376,7 @@
                 };
 
                 // Detect organized status
-                const organizedResult = await this.sourceDetector.detectOrganizedStatus();
+                const organizedResult = await this.sourceDetector.detectOrganizedStatus(sceneDetails);
                 this.currentStatus.organized = organizedResult.organized || false;
 
                 
@@ -1228,6 +1628,32 @@
             this.maxHistoryEntries = 1000; // Limit to prevent storage bloat
         }
 
+        // Prefer idle time for non-urgent persistence
+        _scheduleIdle(callback) {
+            const ric = window.requestIdleCallback || function (cb, opts) {
+                return setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 0 }), 50);
+            };
+            try {
+                ric(callback, { timeout: 1000 });
+            } catch (_) {
+                // Fallback if requestIdleCallback is not usable
+                setTimeout(callback, 50);
+            }
+        }
+
+        _truncateString(val, max = 200) {
+            try {
+                const s = typeof val === 'string' ? val : (val && val.message) ? String(val.message) : JSON.stringify(val);
+                return s && s.length > max ? s.slice(0, max) + '…' : s;
+            } catch (_) {
+                return String(val).slice(0, max);
+            }
+        }
+
+        _unique(arr) {
+            return Array.from(new Set(arr));
+        }
+
         /**
          * Save automation history for a scene
          * @param {string} sceneId - Scene identifier
@@ -1238,19 +1664,32 @@
             try {
                 const history = await this.getAllHistory();
                 const timestamp = new Date().toISOString();
-                
+                // Sanitize incoming payload to keep storage small and stable
+                const sourcesUsed = this._unique((data.sourcesUsed || []).map(String)).slice(0, 5);
+                const errors = (data.errors || []).slice(0, 10).map(e => this._truncateString(e, 200));
+                const duration = typeof data.duration === 'number' ? Math.max(0, Math.round(data.duration)) : null;
+
                 const historyEntry = {
                     sceneId: sceneId,
-                    sceneName: data.sceneName || `Scene ${sceneId}`,
+                    sceneName: this._truncateString(data.sceneName || `Scene ${sceneId}`, 140),
                     url: data.url || window.location.href,
                     timestamp: timestamp,
-                    success: data.success || false,
-                    sourcesUsed: data.sourcesUsed || [],
-                    errors: data.errors || [],
-                    duration: data.duration || null,
+                    success: !!data.success,
+                    sourcesUsed,
+                    errors,
+                    duration,
+                    // Lightweight summary fields for quick UI display
+                    summary: {
+                        actionsCount: Array.isArray(data.actions) ? data.actions.length : (data.actionsCount ?? 0),
+                        fieldsUpdatedCount: Array.isArray(data.fieldsUpdated) ? data.fieldsUpdated.length : (data.fieldsUpdatedCount ?? 0),
+                        warningsCount: Array.isArray(data.warnings) ? data.warnings.length : (data.warningsCount ?? 0),
+                        lastSource: sourcesUsed[0] || undefined,
+                        lastError: errors[0] || undefined
+                    },
                     metadata: {
-                        stashdb: data.stashdb || null,
-                        theporndb: data.theporndb || null,
+                        // Store presence flags instead of heavy objects to avoid bloat
+                        stashdb: !!data.stashdb || null,
+                        theporndb: !!data.theporndb || null,
                         organized: data.organized || false,
                         performersCreated: data.performersCreated || 0,
                         studiosCreated: data.studiosCreated || 0,
@@ -1268,8 +1707,12 @@
                     history.splice(this.maxHistoryEntries);
                 }
                 
-                // Save to persistent storage
-                GM_setValue(this.storageKey, JSON.stringify(history));
+                // Save to persistent storage during idle time to reduce jank
+                this._scheduleIdle(() => {
+                    try {
+                        GM_setValue(this.storageKey, JSON.stringify(history));
+                    } catch (_) {}
+                });
                 
                 return historyEntry;
             } catch (error) {
@@ -1587,7 +2030,7 @@
                 border-radius: 10px !important;
                 padding: 10px 15px !important;
                 box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
-                z-index: 10000 !important;
+                z-index: 999999 !important;
                 color: white !important;
                 font-family: 'Segoe UI', sans-serif !important;
                 display: none !important;
@@ -1676,7 +2119,7 @@
             
             // Hide widget at start
             if (this.widget) {
-                this.widget.style.display = 'none';
+                this.widget.style.setProperty('display', 'none', 'important');
                 this.isMinimized = true;
             }
             
@@ -1750,7 +2193,7 @@
                     max-height: 500px !important;
                     overflow-y: auto !important;
                     box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
-                    z-index: 10000 !important;
+                    z-index: 999999 !important;
                     color: white !important;
                     font-family: 'Segoe UI', sans-serif !important;
                     display: block !important;
@@ -1926,6 +2369,81 @@
                 </div>
             `;
 
+            // Quick actions
+            const actionsBar = document.createElement('div');
+            actionsBar.style.cssText = `
+                display: flex; gap: 10px; margin-top: 12px; justify-content: flex-end;
+            `;
+            const retryBtn = document.createElement('button');
+            retryBtn.textContent = '↻ Retry';
+            retryBtn.style.cssText = 'background:#2980b9;color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;';
+            const copyBtn = document.createElement('button');
+            copyBtn.textContent = '📋 Copy JSON';
+            copyBtn.style.cssText = 'background:#7f8c8d;color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;';
+            const quickFixBtn = document.createElement('button');
+            quickFixBtn.textContent = '🛠️ Quick Fix';
+            quickFixBtn.style.cssText = 'background:#27ae60;color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;';
+            actionsBar.appendChild(copyBtn);
+            actionsBar.appendChild(retryBtn);
+            actionsBar.appendChild(quickFixBtn);
+
+            copyBtn.addEventListener('click', async () => {
+                try {
+                    const compact = {
+                        scene: sceneName,
+                        duration: Number(duration),
+                        success,
+                        sourcesUsed,
+                        actions: successActions.map(a => a.action),
+                        skipped: skippedActions.map(a => a.action),
+                        fieldsUpdated: fieldsUpdated.map(f => f.field),
+                        errors,
+                        warnings
+                    };
+                    await navigator.clipboard.writeText(JSON.stringify(compact, null, 2));
+                    copyBtn.textContent = '✅ Copied';
+                    setTimeout(() => (copyBtn.textContent = '📋 Copy JSON'), 1500);
+                } catch (_) {
+                    copyBtn.textContent = '❌ Failed';
+                    setTimeout(() => (copyBtn.textContent = '📋 Copy JSON'), 1500);
+                }
+            });
+            retryBtn.addEventListener('click', () => {
+                try { window.expandAutomateStash && window.expandAutomateStash(); } catch (_) {}
+                try { window.stashUIManager && window.stashUIManager.startAutomation(); } catch (_) {}
+            });
+
+            quickFixBtn.addEventListener('click', async () => {
+                try {
+                    // Heuristic: if a source was skipped or we saw errors mentioning a source,
+                    // toggle re-scrape for that source and re-run.
+                    const skipped = actions.filter(a => a.status === 'skip').map(a => a.action.toLowerCase());
+                    const hadStashIssues = skipped.some(t => t.includes('stashdb')) || errors.some(e => /stashdb|stash-box/i.test(e)) || warnings.some(w => /stashdb|stash-box/i.test(w));
+                    const hadTpdbIssues = skipped.some(t => t.includes('theporndb') || t.includes('tpdb')) || errors.some(e => /theporndb|tpdb/i.test(e)) || warnings.some(w => /theporndb|tpdb/i.test(w));
+
+                    const ui = window.stashUIManager;
+                    if (!ui) return;
+
+                    // Expand panel if minimized
+                    try { window.expandAutomateStash && window.expandAutomateStash(); } catch (_) {}
+
+                    // Set re-scrape options to focus on problematic sources
+                    ui.rescrapeOptions.forceRescrape = true;
+                    ui.rescrapeOptions.rescrapeStashDB = !!hadStashIssues;
+                    ui.rescrapeOptions.rescrapeThePornDB = !!hadTpdbIssues;
+
+                    // If no specific issues detected, default to re-running both if there were any issues at all
+                    if (!ui.rescrapeOptions.rescrapeStashDB && !ui.rescrapeOptions.rescrapeThePornDB && (errors.length || warnings.length || skipped.length)) {
+                        ui.rescrapeOptions.rescrapeStashDB = true;
+                        ui.rescrapeOptions.rescrapeThePornDB = true;
+                    }
+
+                    // Start automation again
+                    await ui.startAutomation();
+                } catch (_) {
+                }
+            });
+
             // Assemble dialog
             this.widget.appendChild(header);
             this.widget.appendChild(sceneInfo);
@@ -1945,6 +2463,7 @@
             }
             
             this.widget.appendChild(stats);
+            this.widget.appendChild(actionsBar);
 
             // Make widget draggable
             this.makeDraggable(this.widget);
@@ -1964,7 +2483,7 @@
                 border-radius: 10px !important;
                 padding: 10px 15px !important;
                 box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
-                z-index: 10000 !important;
+                z-index: 999999 !important;
                 color: white !important;
                 font-family: 'Segoe UI', sans-serif !important;
                 display: flex !important;
@@ -2004,7 +2523,7 @@
                 `;
                 
                 // Show the widget
-                this.widget.style.display = 'flex';
+                this.widget.style.setProperty('display', 'flex', 'important');
                 
                 // Re-add click handler since innerHTML was replaced
                 this.widget.addEventListener('click', this.expandHandler);
@@ -2129,6 +2648,8 @@
             this.automationInProgress = false;
             this.automationCancelled = false;
             this.cancelButton = null;
+            this.skipButton = null;
+            this.skipCurrentSourceRequested = false;
             
             // Re-scrape state
             this.rescrapeOptions = {
@@ -2144,10 +2665,12 @@
             
             // Initialize automation summary widget (will be created when DOM is ready)
             this.summaryWidget = null;
+            this._organizedAfterSave = false;
             
             // DOM mutation observer for real-time updates
             this.mutationObserver = null;
             this.lastStatusUpdate = Date.now();
+            this.observerRoot = null; // Scoped root for mutation observation
             
             // Draggable state
             this.isDragging = false;
@@ -2278,73 +2801,75 @@
         }
 
         initializeMutationObserver() {
-            // Create debounced update function to avoid excessive updates
             const debouncedUpdate = this.debounce(() => {
                 this.updateStatusFromDOM();
-            }, 1000); // Update at most once per second
+            }, 800); // slightly faster than before without spamming
 
-            // Observe changes in form inputs and buttons that might indicate scraper/organize changes
+            // (Re)create observer
+            if (this.mutationObserver) {
+                this.mutationObserver.disconnect();
+            }
+
             this.mutationObserver = new MutationObserver((mutations) => {
                 let shouldUpdate = false;
 
-                mutations.forEach((mutation) => {
-                    // Check for attribute changes on organize buttons
-                    if (mutation.type === 'attributes' && 
-                        (mutation.attributeName === 'class' || 
-                         mutation.attributeName === 'aria-pressed' || 
-                         mutation.attributeName === 'data-organized')) {
+                for (const mutation of mutations) {
+                    // Attribute changes mostly for organized button
+                    if (mutation.type === 'attributes' && (mutation.attributeName === 'class' || mutation.attributeName === 'aria-pressed' || mutation.attributeName === 'data-organized')) {
                         const target = mutation.target;
-                        if (target.title === 'Organized' || 
-                            target.classList.contains('organized-button') ||
-                            target.textContent.toLowerCase().includes('organize')) {
+                        if (target && (target.title === 'Organized' || target.classList?.contains('organized-button'))) {
                             shouldUpdate = true;
+                            break;
                         }
                     }
 
-                    // Check for input value changes (scraper data)
-                    if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
-                        const target = mutation.target;
-                        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-                            shouldUpdate = true;
-                        }
-                    }
-
-                    // Check for added/removed elements that might be scraper results
-                    if (mutation.type === 'childList') {
-                        mutation.addedNodes.forEach((node) => {
-                            if (node.nodeType === Node.ELEMENT_NODE) {
-                                // Check if added element contains scraper-related content
-                                if (node.querySelector && (
-                                    node.querySelector('input[placeholder*="stash" i]') ||
-                                    node.querySelector('input[placeholder*="porndb" i]') ||
-                                    node.querySelector('button[title="Organized"]') ||
-                                    node.textContent.includes('StashDB') ||
-                                    node.textContent.includes('ThePornDB')
-                                )) {
+                    // Added nodes that might contain scraper UI or edit fields
+                    if (mutation.type === 'childList' && mutation.addedNodes && mutation.addedNodes.length) {
+                        for (const node of mutation.addedNodes) {
+                            if (node.nodeType === Node.ELEMENT_NODE && node.querySelector) {
+                                if (
+                                    node.querySelector('button[title="Organized"], button.organized-button') ||
+                                    node.querySelector('input[placeholder*="stash" i], input[id*="stash" i]') ||
+                                    node.querySelector('input[placeholder*="porndb" i], input[id*="tpdb" i]') ||
+                                    node.querySelector('.dropdown-menu .dropdown-item')
+                                ) {
                                     shouldUpdate = true;
+                                    break;
                                 }
                             }
-                        });
+                        }
+                        if (shouldUpdate) break;
                     }
-                });
-
-                if (shouldUpdate) {
-                    debouncedUpdate();
                 }
+
+                if (shouldUpdate) debouncedUpdate();
             });
 
-            // Start observing
-            if (document.body) {
-                this.mutationObserver.observe(document.body, {
+            // Try to scope to scene/edit containers first
+            const root = this.findObserverRoot() || document.body;
+            this.observerRoot = root;
+
+            if (root) {
+                this.mutationObserver.observe(root, {
                     childList: true,
                     subtree: true,
                     attributes: true,
-                    attributeFilter: ['class', 'aria-pressed', 'value', 'data-organized']
+                    attributeFilter: ['class', 'aria-pressed', 'data-organized']
                 });
             } else {
-                // Wait for DOM to be ready
                 setTimeout(() => this.initializeMutationObserver(), 100);
             }
+        }
+
+        findObserverRoot() {
+            return (
+                document.querySelector('.entity-edit-panel') ||
+                document.querySelector('.scene-edit-details') ||
+                document.querySelector('.edit-panel') ||
+                document.querySelector('form[class*="edit" i]') ||
+                document.querySelector('#root') ||
+                null
+            );
         }
 
         debounce(func, wait) {
@@ -2357,6 +2882,276 @@
                 clearTimeout(timeout);
                 timeout = setTimeout(later, wait);
             };
+        }
+
+        // ===== Adaptive routing, queue, and scoring helpers =====
+        _loadSourceStats() {
+            try {
+                const raw = GM_getValue('as_source_stats', '{}');
+                return JSON.parse(raw);
+            } catch (_) { return {}; }
+        }
+        _saveSourceStats(stats) {
+            try { GM_setValue('as_source_stats', JSON.stringify(stats)); } catch (_) {}
+        }
+        _updateSourceStats(source, ok) {
+            const stats = this._loadSourceStats();
+            stats[source] = stats[source] || { success: 0, fail: 0, last: null };
+            if (ok) stats[source].success++; else stats[source].fail++;
+            stats[source].last = Date.now();
+            this._saveSourceStats(stats);
+        }
+        resolveSourceOrder(already) {
+            const useAdaptive = getConfig(CONFIG.ADAPTIVE_ROUTING);
+            const order = [];
+            if (getConfig(CONFIG.AUTO_SCRAPE_STASHDB) && !already.stashdb) order.push('stashdb');
+            if (getConfig(CONFIG.AUTO_SCRAPE_THEPORNDB) && !already.theporndb) order.push('theporndb');
+            if (!useAdaptive || order.length <= 1) return order;
+            const stats = this._loadSourceStats();
+            const score = (s) => {
+                const st = stats[s] || { success: 0, fail: 0 };
+                const total = st.success + st.fail;
+                return total ? st.success / total : 0.5;
+            };
+            return order.sort((a, b) => score(b) - score(a));
+        }
+        // Rescrape queue helpers
+        _loadQueue() {
+            try { return JSON.parse(GM_getValue('as_rescrape_queue', '[]')); } catch (_) { return []; }
+        }
+        _saveQueue(q) {
+            try { GM_setValue('as_rescrape_queue', JSON.stringify(q)); } catch (_) {}
+        }
+        enqueueRescrape(reason = 'Low confidence') {
+            try {
+                const id = this.statusTracker.extractSceneId();
+                if (!id) return;
+                const q = this._loadQueue();
+                const exists = q.find(e => e.sceneId === id);
+                const when = Date.now() + (getConfig(CONFIG.RESCRAPE_RETRY_MINUTES) * 60 * 1000);
+                if (exists) { exists.nextAttempt = when; exists.reason = reason; }
+                else q.push({ sceneId: id, reason, nextAttempt: when, attempts: 0 });
+                this._saveQueue(q);
+                this._renderQueue();
+            } catch (_) {}
+        }
+        _renderQueue() {
+            const el = document.querySelector('#stash-queue-display');
+            if (!el) return;
+            const q = this._loadQueue();
+            if (!q.length) { el.innerHTML = ''; return; }
+            const items = q
+                .map(e => ({...e}))
+                .sort((a,b) => a.nextAttempt - b.nextAttempt)
+                .slice(0, 3)
+                .map(e => {
+                    const inMin = Math.max(0, Math.round((e.nextAttempt - Date.now())/60000));
+                    return `<div style="opacity:.8;">Scene ${e.sceneId} • in ${inMin}m • ${e.reason}</div>`;
+                }).join('');
+            el.innerHTML = `<div style="font-size:12px; opacity:.85;">Scheduled re-scrapes: ${q.length}</div>${items ? `<div style=\"font-size:11px; margin-top:6px;\">${items}</div>`: ''}`;
+        }
+        _processQueueForCurrentScene() {
+            try {
+                const id = this.statusTracker.extractSceneId();
+                if (!id) return;
+                const q = this._loadQueue();
+                const item = q.find(e => e.sceneId === id && e.nextAttempt <= Date.now());
+                if (!item) return;
+                // backoff next attempt and persist before running
+                item.attempts += 1;
+                item.nextAttempt = Date.now() + Math.min(120, getConfig(CONFIG.RESCRAPE_RETRY_MINUTES)) * 60 * 1000;
+                this._saveQueue(q);
+                this._renderQueue();
+                // Run focused re-scrape (both sources by default)
+                this.rescrapeOptions.forceRescrape = true;
+                this.rescrapeOptions.rescrapeStashDB = true;
+                this.rescrapeOptions.rescrapeThePornDB = true;
+                notifications.show('Running scheduled re-scrape for this scene', 'info');
+                this.startAutomation();
+            } catch (_) {}
+        }
+        // Simple confidence score for scraped data
+        scoreScrapedData(data) {
+            if (!data) return 0;
+            let score = 0;
+            if (data.title) score += 20;
+            if (data.date) score += 10;
+            if (data.studio) score += 15;
+            if (data.performers?.length) score += Math.min(25, data.performers.length * 5);
+            if (data.tags?.length) score += Math.min(10, data.tags.length * 2);
+            if (data.details && data.details.length > 40) score += 10;
+            if (data.url) score += 5;
+            if (data.thumbnail) score += 5;
+            return Math.max(0, Math.min(100, score));
+        }
+
+        /**
+         * Wait for any selector to appear within the given root
+         * @param {string[]} selectors
+         * @param {{timeout?: number, root?: Element}} opts
+         */
+        async waitForElement(selectors, opts = {}) {
+            const timeout = opts.timeout ?? 5000;
+            const root = opts.root ?? document;
+
+            const find = () => {
+                for (const sel of selectors) {
+                    const el = root.querySelector(sel);
+                    if (el) return el;
+                }
+                return null;
+            };
+
+            const immediate = find();
+            if (immediate) return immediate;
+
+        return new Promise((resolve, reject) => {
+                let settled = false;
+                let to;
+                const cleanup = () => {
+                    try { observer.disconnect(); } catch (_) {}
+                    if (to) { clearTimeout(to); to = undefined; }
+                };
+                const observer = new MutationObserver(() => {
+                    // Respect automation cancellation if available in this context
+            if (this && (this.automationCancelled || this.skipCurrentSourceRequested)) {
+                        if (!settled) {
+                            settled = true;
+                            cleanup();
+                const reason = this.skipCurrentSourceRequested ? 'skip requested' : 'Automation cancelled';
+                reject(new Error(reason));
+                        }
+                        return;
+                    }
+                    const el = find();
+                    if (el && !settled) {
+                        settled = true;
+                        cleanup();
+                        resolve(el);
+                    }
+                });
+                observer.observe(root === document ? document.documentElement : root, {
+                    childList: true,
+                    subtree: true
+                });
+
+                to = setTimeout(() => {
+                    if (!settled) {
+                        settled = true;
+                        cleanup();
+                        reject(new Error('waitForElement timeout'));
+                    }
+                }, timeout);
+            });
+        }
+
+        /**
+         * Wait until an element matching selectors exists AND is visible in viewport
+         * Visibility means: present, display not none, within viewport bounds (with margin)
+         */
+        async waitForVisibleElement(selectors, opts = {}) {
+            const timeout = opts.timeout ?? getConfig(CONFIG.VISIBLE_WAIT_TIMEOUT_MS);
+            const root = opts.root ?? document;
+            const margin = opts.margin ?? 8;
+
+            const isVisible = (el) => {
+                if (!el || !el.isConnected) return false;
+                const style = window.getComputedStyle(el);
+                if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+                const rect = el.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) return false;
+                return (
+                    rect.bottom > margin &&
+                    rect.right > margin &&
+                    rect.top < (window.innerHeight - margin) &&
+                    rect.left < (window.innerWidth - margin)
+                );
+            };
+
+            // Try immediate match
+            for (const sel of selectors) {
+                const el = root.querySelector(sel);
+                if (el && isVisible(el)) return el;
+            }
+
+            // Otherwise observe mutations and scroll into view when found
+            const found = await this.waitForElement(selectors, { timeout, root });
+            if (!found) throw new Error('waitForVisibleElement: element not found');
+
+            if (!isVisible(found) && getConfig(CONFIG.FAST_CLICK_SCROLL)) {
+                try { found.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' }); } catch (_) {
+                    try { found.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' }); } catch (_) {}
+                }
+            }
+            return found;
+        }
+
+        /**
+         * Fast click: wait for visibility, focus, click with minimal delay
+         */
+        async clickFast(selectorsOrElement, opts = {}) {
+            const el = (selectorsOrElement instanceof Element)
+                ? selectorsOrElement
+                : await this.waitForVisibleElement([].concat(selectorsOrElement), opts);
+            if (!el) throw new Error('clickFast: element not found');
+            el.focus({ preventScroll: true });
+            el.click();
+            return el;
+        }
+
+        /**
+         * Detect outcome of a scraper run by watching UI signals (toast/modals/empty lists)
+         * Returns { found: boolean, reason?: string }
+         */
+        async detectScraperOutcome(timeoutMs = getConfig(CONFIG.SCRAPER_OUTCOME_TIMEOUT_MS)) {
+            const start = Date.now();
+            const endBy = start + timeoutMs;
+
+            const negativeSelectors = [
+                '.toast.show, .Toastify__toast, .alert, .notification',
+                '.modal.show .modal-body',
+                '.empty, .no-results, .text-muted, .text-warning'
+            ];
+            const negativeTexts = [
+                'no results', 'no matches', 'not found', 'nothing found',
+                'failed', 'error', 'could not', 'unable to', 'empty'
+            ];
+
+            const positiveSelectors = [
+                '.modal.show .modal-dialog',
+                '.entity-edit-panel', '.scene-edit-details', '.edit-panel'
+            ];
+
+            // Quick positive check
+            for (const sel of positiveSelectors) {
+                if (document.querySelector(sel)) return { found: true };
+            }
+
+            // Poll lightweight rather than heavy observers for outcome window
+            while (Date.now() < endBy) {
+                // If user asked to skip current source, exit immediately as not found
+                if (this.skipCurrentSourceRequested) {
+                    return { found: false, reason: 'user skipped' };
+                }
+                // Positive signals
+                for (const sel of positiveSelectors) {
+                    if (document.querySelector(sel)) return { found: true };
+                }
+                // Negative signals
+                for (const sel of negativeSelectors) {
+                    const nodes = document.querySelectorAll(sel);
+                    for (const n of nodes) {
+                        const text = (n.textContent || '').toLowerCase();
+                        if (!text) continue;
+                        if (negativeTexts.some(t => text.includes(t))) {
+                            return { found: false, reason: text.slice(0, 200) };
+                        }
+                    }
+                }
+                await this.wait(150);
+            }
+            // Timeout: ambiguous, assume not found to be safe
+            return { found: false, reason: 'timeout waiting for scraper outcome' };
         }
 
         async updateStatusFromDOM() {
@@ -2397,7 +3192,7 @@
                 position: fixed;
                 top: ${position.top}px;
                 right: ${position.right}px;
-                z-index: 10000;
+                z-index: 999999;
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 border-radius: 15px;
                 padding: 20px;
@@ -2434,6 +3229,7 @@
 
             document.body.appendChild(this.panel);
             this.isMinimized = false;
+            this.debugVisibility('createPanel:post-append');
             
             // Initialize status tracking after panel is created
             this.initializeStatusTracking();
@@ -2753,6 +3549,9 @@
             }
             this.createMinimizedButton();
             this.isMinimized = true;
+            // Pause observer to save cycles
+            if (this.mutationObserver) this.mutationObserver.disconnect();
+            this.debugVisibility('minimized');
         }
 
         createMinimizedButton() {
@@ -2769,7 +3568,7 @@
                 position: fixed;
                 top: ${position.top}px;
                 right: ${position.right}px;
-                z-index: 10000;
+                z-index: 999999;
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 color: white;
                 border: none;
@@ -2793,6 +3592,7 @@
             this.minimizedButton.title = 'Double-click to open, drag to move';
 
             document.body.appendChild(this.minimizedButton);
+            this.debugVisibility('minimized-button');
         }
 
         expand() {
@@ -2806,6 +3606,10 @@
                 this.createPanel();
             }
             this.isMinimized = false;
+            // Resume observer
+            this.initializeMutationObserver();
+            this.ensurePanelVisible('expand');
+            this.debugVisibility('expanded');
         }
 
         updateSceneStatus(status) {
@@ -2817,6 +3621,47 @@
         showNotification(message, type = 'info', duration = 4000) {
             const notificationManager = new NotificationManager();
             return notificationManager.show(message, type, duration);
+        }
+
+        // Debug visibility helper (only active when DEBUG is enabled)
+        debugVisibility(tag = 'dbg') {
+            try {
+                if (!getConfig(CONFIG.DEBUG)) return;
+                const isScenePage = window.location.href.includes('/scenes/') && !window.location.href.includes('/scenes/markers');
+                const panel = document.getElementById('stash-automation-panel');
+                const inDOM = !!(panel && panel.parentNode);
+                const cs = panel ? getComputedStyle(panel) : null;
+                const display = cs ? cs.display : 'n/a';
+                const opacity = cs ? cs.opacity : 'n/a';
+                const rect = panel ? panel.getBoundingClientRect() : null;
+                const buttonPresent = !!this.minimizedButton && document.body.contains(this.minimizedButton);
+                debugLog('UI visibility', {
+                    tag,
+                    url: window.location.href,
+                    isScenePage,
+                    minimized: this.isMinimized,
+                    panelInDOM: inDOM,
+                    display,
+                    opacity,
+                    rect,
+                    buttonPresent
+                });
+                this.showNotification(`🧪 UI[${tag}] panel:${inDOM ? 'yes' : 'no'} disp:${display} min:${this.isMinimized}`, 'info', 2500);
+            } catch (_) {}
+        }
+
+        // Ensure panel exists and is visible; recreate if needed
+        ensurePanelVisible(tag = 'ensure') {
+            try {
+                const panel = document.getElementById('stash-automation-panel');
+                if (!panel || !panel.parentNode) {
+                    this.createPanel();
+                } else {
+                    panel.style.display = 'block';
+                }
+                this.isMinimized = false;
+                this.debugVisibility(`ensurePanelVisible:${tag}`);
+            } catch (_) {}
         }
 
         showConfigDialog() {
@@ -2879,7 +3724,8 @@
                 { key: CONFIG.AUTO_APPLY_CHANGES, label: 'Auto-apply changes (no confirmation)' },
                 { key: CONFIG.SKIP_ALREADY_SCRAPED, label: 'Skip already scraped sources' },
                 { key: CONFIG.ENABLE_CROSS_SCENE_INTELLIGENCE, label: '🧠 Enable cross-scene intelligence (GraphQL)' },
-                { key: CONFIG.PREFER_HIGHER_RES_THUMBNAILS, label: '🖼️ Prefer higher resolution thumbnails' }
+                { key: CONFIG.PREFER_HIGHER_RES_THUMBNAILS, label: '🖼️ Prefer higher resolution thumbnails' },
+                { key: CONFIG.DEBUG, label: '🐞 Enable debug logging' }
             ];
 
             const optionsContainer = document.createElement('div');
@@ -2911,6 +3757,68 @@
                 label.appendChild(text);
                 optionsContainer.appendChild(label);
             });
+
+            // Advanced adaptive routing settings
+            const advancedSection = document.createElement('div');
+            advancedSection.style.cssText = `
+                margin: 20px 0;
+                padding: 15px;
+                background: rgba(46, 204, 113, 0.08);
+                border-radius: 8px;
+                border: 1px solid rgba(46, 204, 113, 0.3);
+            `;
+            const advTitle = document.createElement('h3');
+            advTitle.textContent = '🧭 Adaptive Routing & Confidence';
+            advTitle.style.cssText = 'margin: 0 0 10px 0; color: #2ecc71; font-size: 16px;';
+
+            const adaptiveRow = document.createElement('label');
+            adaptiveRow.style.cssText = 'display: block; margin-bottom: 12px;';
+            const adaptiveCb = document.createElement('input');
+            adaptiveCb.type = 'checkbox';
+            adaptiveCb.checked = !!getConfig(CONFIG.ADAPTIVE_ROUTING);
+            adaptiveCb.setAttribute('data-config-key', CONFIG.ADAPTIVE_ROUTING);
+            adaptiveCb.style.cssText = 'margin-right: 10px; transform: scale(1.2);';
+            adaptiveRow.appendChild(adaptiveCb);
+            const adaptiveText = document.createElement('span');
+            adaptiveText.textContent = 'Enable adaptive source ordering';
+            adaptiveRow.appendChild(adaptiveText);
+
+            const scoreRow = document.createElement('div');
+            scoreRow.style.cssText = 'display: flex; align-items: center; gap: 10px; margin: 8px 0;';
+            const scoreLabel = document.createElement('label');
+            scoreLabel.textContent = 'Min auto-apply score:';
+            scoreLabel.style.cssText = 'min-width: 170px; color: #ecf0f1;';
+            const scoreInput = document.createElement('input');
+            scoreInput.type = 'number';
+            scoreInput.min = '0';
+            scoreInput.max = '100';
+            scoreInput.step = '5';
+            scoreInput.value = Number(getConfig(CONFIG.MIN_AUTO_APPLY_SCORE) || 0);
+            scoreInput.setAttribute('data-config-key', CONFIG.MIN_AUTO_APPLY_SCORE);
+            scoreInput.style.cssText = 'width: 100px; padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white;';
+            scoreRow.appendChild(scoreLabel);
+            scoreRow.appendChild(scoreInput);
+
+            const retryRow = document.createElement('div');
+            retryRow.style.cssText = 'display: flex; align-items: center; gap: 10px; margin: 8px 0;';
+            const retryLabel = document.createElement('label');
+            retryLabel.textContent = 'Rescrape retry minutes:';
+            retryLabel.style.cssText = 'min-width: 170px; color: #ecf0f1;';
+            const retryInput = document.createElement('input');
+            retryInput.type = 'number';
+            retryInput.min = '5';
+            retryInput.max = '180';
+            retryInput.step = '5';
+            retryInput.value = Number(getConfig(CONFIG.RESCRAPE_RETRY_MINUTES) || 30);
+            retryInput.setAttribute('data-config-key', CONFIG.RESCRAPE_RETRY_MINUTES);
+            retryInput.style.cssText = 'width: 100px; padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white;';
+            retryRow.appendChild(retryLabel);
+            retryRow.appendChild(retryInput);
+
+            advancedSection.appendChild(advTitle);
+            advancedSection.appendChild(adaptiveRow);
+            advancedSection.appendChild(scoreRow);
+            advancedSection.appendChild(retryRow);
 
 
             // GraphQL API Configuration section
@@ -3088,9 +3996,143 @@
                 actionsContainer.appendChild(button);
             });
 
+            // Storage info section
+            const storageSection = document.createElement('div');
+            storageSection.style.cssText = `
+                margin: 20px 0;
+                padding: 15px;
+                background: rgba(155, 89, 182, 0.08);
+                border-radius: 8px;
+                border: 1px solid rgba(155, 89, 182, 0.3);
+            `;
+
+            const storageTitle = document.createElement('h3');
+            storageTitle.textContent = '💾 Storage Info';
+            storageTitle.style.cssText = `
+                margin: 0 0 10px 0;
+                color: #9b59b6;
+                font-size: 16px;
+            `;
+
+            const storageBody = document.createElement('div');
+            storageBody.style.cssText = 'font-size: 13px; color: #bdc3c7; margin-bottom: 10px; white-space: pre-line;';
+            storageBody.textContent = 'Loading...';
+
+            const storageStats = document.createElement('div');
+            storageStats.style.cssText = 'font-size: 13px; color: #ecf0f1; margin: 8px 0; white-space: pre-line;';
+
+            const recentList = document.createElement('div');
+            recentList.style.cssText = 'margin-top: 8px; border-top: 1px dashed rgba(255,255,255,0.15); padding-top: 8px;';
+
+            const storageActions = document.createElement('div');
+            storageActions.style.cssText = 'display: flex; gap: 10px; flex-wrap: wrap;';
+            const refreshBtn = document.createElement('button');
+            refreshBtn.textContent = '🔄 Refresh';
+            refreshBtn.style.cssText = 'background: #8e44ad; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;';
+            const clearBtn = document.createElement('button');
+            clearBtn.textContent = '🧹 Clear History';
+            clearBtn.style.cssText = 'background: #c0392b; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;';
+            const clearOldBtn = document.createElement('button');
+            clearOldBtn.textContent = '🗑️ Clear >30 days';
+            clearOldBtn.style.cssText = 'background: #d35400; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;';
+            const exportBtn = document.createElement('button');
+            exportBtn.textContent = '📤 Export';
+            exportBtn.style.cssText = 'background: #16a085; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;';
+            const importBtn = document.createElement('button');
+            importBtn.textContent = '📥 Import';
+            importBtn.style.cssText = 'background: #2ecc71; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;';
+            const importInput = document.createElement('input');
+            importInput.type = 'file';
+            importInput.accept = 'application/json';
+            importInput.style.display = 'none';
+            storageActions.appendChild(refreshBtn);
+            storageActions.appendChild(clearBtn);
+            storageActions.appendChild(clearOldBtn);
+            storageActions.appendChild(exportBtn);
+            storageActions.appendChild(importBtn);
+            storageActions.appendChild(importInput);
+
+            storageSection.appendChild(storageTitle);
+            storageSection.appendChild(storageBody);
+            storageSection.appendChild(storageStats);
+            storageSection.appendChild(recentList);
+            storageSection.appendChild(storageActions);
+
+            const updateStorageInfo = async () => {
+                try {
+                    const info = await this.historyManager.getStorageInfo();
+                    const stats = await this.historyManager.getStatistics();
+                    storageBody.textContent = `Entries: ${info.entries}\nSize: ${info.sizeKB} KB\nKey: ${info.storageKey}\nMax Entries: ${info.maxEntries}`;
+                    storageStats.textContent = `Success: ${stats.successfulAutomations}/${stats.totalAutomations} (${stats.successRate || 0}%)\nErrors: ${stats.errorsCount}\nSources: StashDB ${stats.sourcesUsed.stashdb}, ThePornDB ${stats.sourcesUsed.theporndb}`;
+                    // Recent history preview (up to 5)
+                    const all = await this.historyManager.getAllHistory();
+                    const recent = all.slice(0, 5);
+                    recentList.innerHTML = recent.length ? recent.map(h => {
+                        const ok = h.success ? '✅' : '❌';
+                        const counts = h.summary ? ` • A:${h.summary.actionsCount||0} F:${h.summary.fieldsUpdatedCount||0} W:${h.summary.warningsCount||0}` : '';
+                        const when = new Date(h.timestamp).toLocaleString();
+                        return `<div style="font-size:12px; opacity:.9; margin:4px 0;">${ok} [${when}] ${h.sceneName || 'Scene ' + h.sceneId}${counts}</div>`;
+                    }).join('') : '<div style="opacity:.7; font-size:12px;">No history yet</div>';
+                } catch (err) {
+                    storageBody.textContent = 'Failed to load storage info';
+                    storageStats.textContent = '';
+                    recentList.textContent = '';
+                }
+            };
+            refreshBtn.addEventListener('click', updateStorageInfo);
+            clearBtn.addEventListener('click', async () => {
+                if (confirm('Clear all automation history? This cannot be undone.')) {
+                    const ok = await this.historyManager.clearHistory();
+                    notifications.show(ok ? 'History cleared' : 'Failed to clear history', ok ? 'success' : 'error');
+                    updateStorageInfo();
+                }
+            });
+            clearOldBtn.addEventListener('click', async () => {
+                const removed = await this.historyManager.clearOldHistory(30);
+                notifications.show(`Removed ${removed} entries older than 30 days`, 'info');
+                updateStorageInfo();
+            });
+            exportBtn.addEventListener('click', async () => {
+                const data = await this.historyManager.exportHistory();
+                if (!data) {
+                    notifications.show('Export failed', 'error');
+                    return;
+                }
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `automateStash-history-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 0);
+            });
+            importBtn.addEventListener('click', () => importInput.click());
+            importInput.addEventListener('change', async (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                try {
+                    const text = await file.text();
+                    const ok = await this.historyManager.importHistory(text);
+                    notifications.show(ok ? 'Import successful' : 'Import failed', ok ? 'success' : 'error');
+                    updateStorageInfo();
+                } catch (_) {
+                    notifications.show('Import failed', 'error');
+                } finally {
+                    importInput.value = '';
+                }
+            });
+            // initial load
+            updateStorageInfo();
+
             dialog.appendChild(title);
             dialog.appendChild(optionsContainer);
             dialog.appendChild(graphqlSection);
+            dialog.appendChild(advancedSection);
+            dialog.appendChild(storageSection);
             dialog.appendChild(actionsContainer);
 
             backdrop.appendChild(dialog);
@@ -3115,6 +4157,13 @@
                         setConfig(option.key, checkbox.checked);
                     }
                 });
+                // Save advanced settings
+                const adaptiveCb = dialog.querySelector(`[data-config-key="${CONFIG.ADAPTIVE_ROUTING}"]`);
+                const scoreInput = dialog.querySelector(`[data-config-key="${CONFIG.MIN_AUTO_APPLY_SCORE}"]`);
+                const retryInput = dialog.querySelector(`[data-config-key="${CONFIG.RESCRAPE_RETRY_MINUTES}"]`);
+                if (adaptiveCb) setConfig(CONFIG.ADAPTIVE_ROUTING, !!adaptiveCb.checked);
+                if (scoreInput) setConfig(CONFIG.MIN_AUTO_APPLY_SCORE, Math.max(0, Math.min(100, Number(scoreInput.value)||0)));
+                if (retryInput) setConfig(CONFIG.RESCRAPE_RETRY_MINUTES, Math.max(5, Math.min(180, Number(retryInput.value)||30)));
                 
                 // Save GraphQL configuration inputs
                 const addressInput = dialog.querySelector(`[data-config-key="${CONFIG.STASH_ADDRESS}"]`);
@@ -3172,6 +4221,7 @@
                 this.mutationObserver.disconnect();
                 this.mutationObserver = null;
             }
+            this.observerRoot = null;
             
             this.panel = null;
             this.minimizedButton = null;
@@ -3233,6 +4283,7 @@
             
             // Will be populated by updateStatusDisplay
             this.statusSummaryContainer = statusContainer;
+            this._lastStatusSummaryKey = '';
             return statusContainer;
         }
         
@@ -3244,6 +4295,18 @@
             
             const summary = this.statusTracker.getStatusSummary();
             const completion = this.statusTracker.getCompletionStatus();
+            // Skip if no change to avoid unnecessary DOM work
+            const nextKey = JSON.stringify({
+                scene: summary.scene.id,
+                stashdb: summary.sources.stashdb.status,
+                tpdb: summary.sources.theporndb.status,
+                organized: summary.organized.status,
+                pct: completion.percentage
+            });
+            if (this._lastStatusSummaryKey === nextKey) {
+                return;
+            }
+            this._lastStatusSummaryKey = nextKey;
             
             this.statusSummaryContainer.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -3313,11 +4376,14 @@
             // Start tracking automation for summary
             const sceneName = this.statusTracker.extractSceneName() || 'Unknown Scene';
             const sceneId = this.statusTracker.extractSceneId() || '';
+            const startUrl = window.location.href;
             this.summaryWidget.startTracking(sceneName, sceneId);
             
             // Reset and set automation state
             this.automationCancelled = false;
             this.automationInProgress = true;
+            // Ensure organize-after-save state starts clean
+            this._organizedAfterSave = false;
             
             // Check if we're in re-scrape mode
             this.rescrapeOptions.forceRescrape = this.rescrapeOptions.rescrapeStashDB || this.rescrapeOptions.rescrapeThePornDB;
@@ -3326,9 +4392,22 @@
             this.showCancelButton();
 
             try {
+                // Ensure we are on the edit panel before proceeding
+                const onEdit = await this.openEditPanel();
+                if (!onEdit) {
+                    throw new Error('Could not open edit panel');
+                }
+
+                const ensureSameScene = () => {
+                    const urlChanged = window.location.href !== startUrl;
+                    const idChanged = (this.statusTracker.extractSceneId() || '') !== sceneId;
+                    if (urlChanged || idChanged) throw new Error('Navigation detected during automation');
+                };
+                ensureSameScene();
                 // Check what's already scraped
                 let alreadyScraped = { stashdb: false, theporndb: false };
                 if (getConfig(CONFIG.SKIP_ALREADY_SCRAPED) && !this.rescrapeOptions.forceRescrape) {
+                    ensureSameScene();
                     alreadyScraped = await this.checkAlreadyScraped();
                 }
 
@@ -3352,85 +4431,98 @@
                     this.updateSceneStatus('🚀 Starting automation workflow...');
                 }
 
-                // Run automation steps
+                // Optionally process queued rescrapes for this scene first
+                try { this._processQueueForCurrentScene && this._processQueueForCurrentScene(); } catch(_) {}
+                try { this._renderQueue && this._renderQueue(); } catch(_) {}
+
+                // Determine source order
+                const useAdaptive = getConfig(CONFIG.ADAPTIVE_ROUTING);
+                const orderedSources = useAdaptive ? this.resolveSourceOrder(alreadyScraped) : ['stashdb', 'theporndb'];
+                try {
+                    notifications.show(`🧭 Source order: ${orderedSources.join(' → ')}`, 'info');
+                } catch(_) {}
+                // Run automation steps in chosen order
                 let stashDBResult = 'skip';
                 let thePornDBResult = 'skip';
 
-                if (needsStashDB) {
+                const runSource = async (sourceKey) => {
+                    const isStash = sourceKey === 'stashdb';
+                    const label = isStash ? 'StashDB' : 'ThePornDB';
+                    const scrape = isStash ? this.scrapeStashDB.bind(this) : this.scrapeThePornDB.bind(this);
+
                     // Check for cancellation before scraping
                     if (this.automationCancelled) {
                         this.updateSceneStatus('⚠️ Automation cancelled');
-                        this.summaryWidget.addAction('StashDB Scraping', 'cancelled');
-                        return;
+                        this.summaryWidget.addAction(`${label} Scraping`, 'cancelled');
+                        return 'cancel';
                     }
-                    
-                    this.summaryWidget.addSource('StashDB');
-                    await this.scrapeStashDB();
-                    this.summaryWidget.addAction('Scraped StashDB', 'success');
-                    
+                    ensureSameScene();
+
+                    this.summaryWidget.addSource(label);
+                    if (this.skipCurrentSourceRequested) {
+                        this.summaryWidget.addAction(`Scraped ${label}`, 'skip', 'user skipped');
+                    }
+                    const outcome = this.skipCurrentSourceRequested ? { found: false, skip: true, reason: 'user skipped' } : await scrape();
+                    this.skipCurrentSourceRequested = false;
+                    if (!outcome || outcome.found === false) {
+                        const reason = (outcome && outcome.reason) ? outcome.reason : 'no match';
+                        this.summaryWidget.addAction(`Scraped ${label}`, 'skip', reason);
+                        this._updateSourceStats && this._updateSourceStats(sourceKey, false);
+                    } else {
+                        this.summaryWidget.addAction(`Scraped ${label}`, 'success');
+                        this._updateSourceStats && this._updateSourceStats(sourceKey, true);
+                    }
+
                     // Check for cancellation after scraping
                     if (this.automationCancelled) {
                         this.updateSceneStatus('⚠️ Automation cancelled');
-                        return;
+                        return 'cancel';
                     }
-                    
-                    if (getConfig(CONFIG.AUTO_CREATE_PERFORMERS)) {
-                        await this.createNewPerformers();
-                        this.summaryWidget.addAction('Created new performers/tags', 'success');
-                        
-                        // Check for cancellation after creating performers
-                        if (this.automationCancelled) {
-                            this.updateSceneStatus('⚠️ Automation cancelled');
-                            return;
+                    ensureSameScene();
+
+                    // Only proceed with performers/apply if scraper found a match
+                    if (outcome && outcome.found) {
+                        if (getConfig(CONFIG.AUTO_CREATE_PERFORMERS)) {
+                            await this.createNewPerformers();
+                            this.summaryWidget.addAction('Created new performers/tags', 'success');
+
+                            // Check for cancellation after creating performers
+                            if (this.automationCancelled) {
+                                this.updateSceneStatus('⚠️ Automation cancelled');
+                                return 'cancel';
+                            }
                         }
+
+                        if (this.skipCurrentSourceRequested) {
+                            this.summaryWidget.addAction(`Apply ${label} data`, 'skip', 'user skipped');
+                            return 'skip';
+                        } else {
+                            const applyResult = await this.applyScrapedData();
+                            if (applyResult === 'cancel') {
+                                this.updateSceneStatus('⚠️ Automation cancelled by user');
+                                return 'cancel';
+                            }
+                            return applyResult;
+                        }
+                    } else {
+                        return 'skip';
                     }
-                    
-                    stashDBResult = await this.applyScrapedData();
-                    if (stashDBResult === 'cancel') {
-                        // User cancelled entire automation
-                        this.updateSceneStatus('⚠️ Automation cancelled by user');
-                        return;
-                    } else if (stashDBResult === 'skip') {
+                };
+
+                for (const src of orderedSources) {
+                    if (src === 'stashdb' && needsStashDB) {
+                        const r = await runSource('stashdb');
+                        stashDBResult = r;
+                        if (r === 'cancel') return;
+                    }
+                    if (src === 'theporndb' && needsThePornDB) {
+                        const r = await runSource('theporndb');
+                        thePornDBResult = r;
+                        if (r === 'cancel') return;
                     }
                 }
 
-                if (needsThePornDB) {
-                    // Check for cancellation before scraping
-                    if (this.automationCancelled) {
-                        this.updateSceneStatus('⚠️ Automation cancelled');
-                        this.summaryWidget.addAction('ThePornDB Scraping', 'cancelled');
-                        return;
-                    }
-                    
-                    this.summaryWidget.addSource('ThePornDB');
-                    await this.scrapeThePornDB();
-                    this.summaryWidget.addAction('Scraped ThePornDB', 'success');
-                    
-                    // Check for cancellation after scraping
-                    if (this.automationCancelled) {
-                        this.updateSceneStatus('⚠️ Automation cancelled');
-                        return;
-                    }
-                    
-                    if (getConfig(CONFIG.AUTO_CREATE_PERFORMERS)) {
-                        await this.createNewPerformers();
-                        this.summaryWidget.addAction('Created new performers/tags', 'success');
-                        
-                        // Check for cancellation after creating performers
-                        if (this.automationCancelled) {
-                            this.updateSceneStatus('⚠️ Automation cancelled');
-                            return;
-                        }
-                    }
-                    
-                    thePornDBResult = await this.applyScrapedData();
-                    if (thePornDBResult === 'cancel') {
-                        // User cancelled entire automation
-                        this.updateSceneStatus('⚠️ Automation cancelled by user');
-                        return;
-                    } else if (thePornDBResult === 'skip') {
-                    }
-                }
+                // (per-source blocks replaced by ordered loop above)
 
                 // Check for cancellation before saving
                 if (this.automationCancelled) {
@@ -3439,7 +4531,12 @@
                 }
                 
                 // Save scraped data first
+                ensureSameScene();
                 await this.saveScene();
+                this.summaryWidget.addAction('Saved scene', 'success');
+                if (this._organizedAfterSave) {
+                    this.summaryWidget.addAction('Marked as organized', 'success');
+                }
                 
                 // Check for cancellation after saving
                 if (this.automationCancelled) {
@@ -3450,29 +4547,36 @@
                 // Check organize status before attempting organization
                 if (getConfig(CONFIG.AUTO_ORGANIZE)) {
                     // Check current organized status first
+                    ensureSameScene();
                     const isCurrentlyOrganized = await this.checkOrganizedStatus();
                     
                     if (isCurrentlyOrganized) {
                         this.updateSceneStatus('✅ Already organized');
                         this.summaryWidget.addAction('Mark as organized', 'skip', 'Already organized');
                     } else {
-                        const hasStashDB = alreadyScraped.stashdb || needsStashDB;
-                        const hasThePornDB = alreadyScraped.theporndb || needsThePornDB;
-
-
-                        if (hasStashDB && hasThePornDB) {
-                            
-                            // Organize the scene
-                            await this.organizeScene();
-                            this.summaryWidget.addAction('Marked as organized', 'success');
-                            
-                            // Save again after organizing
-                            await this.saveScene();
-                            this.summaryWidget.addAction('Saved scene', 'success');
-                        } else if (hasStashDB || hasThePornDB) {
-                            this.updateSceneStatus('⚠️ Skipping organization - need both sources');
+                        // If we already organized right after save, skip re-organizing
+                        if (this._organizedAfterSave) {
+                            this.updateSceneStatus('✅ Organized after save');
+                            this.summaryWidget.addAction('Mark as organized', 'skip', 'Already organized after save');
                         } else {
-                            this.updateSceneStatus('❌ No sources found');
+                            const hasStashDB = alreadyScraped.stashdb || needsStashDB;
+                            const hasThePornDB = alreadyScraped.theporndb || needsThePornDB;
+
+                            if (hasStashDB && hasThePornDB) {
+                                // Organize the scene
+                                ensureSameScene();
+                                await this.organizeScene();
+                                this.summaryWidget.addAction('Marked as organized', 'success');
+                                
+                                // Save again after organizing
+                                ensureSameScene();
+                                await this.saveScene();
+                                this.summaryWidget.addAction('Saved scene', 'success');
+                            } else if (hasStashDB || hasThePornDB) {
+                                this.updateSceneStatus('⚠️ Skipping organization - need both sources');
+                            } else {
+                                this.updateSceneStatus('❌ No sources found');
+                            }
                         }
                     }
                 }
@@ -3481,6 +4585,7 @@
                 notifications.show('✅ Automation completed successfully!', 'success');
 
                 // Save successful automation history
+                const organizedNow = await this.checkOrganizedStatus();
                 await this.saveAutomationResult({
                     success: true,
                     sourcesUsed: [
@@ -3489,7 +4594,7 @@
                     ],
                     stashdb: alreadyScraped.stashdb || stashDBResult === 'apply',
                     theporndb: alreadyScraped.theporndb || thePornDBResult === 'apply',
-                    organized: getConfig(CONFIG.AUTO_ORGANIZE),
+                    organized: organizedNow,
                     skippedSources: [
                         ...(stashDBResult === 'skip' && needsStashDB ? ['stashdb'] : []),
                         ...(thePornDBResult === 'skip' && needsThePornDB ? ['theporndb'] : [])
@@ -3539,6 +4644,7 @@
                 // Always cleanup automation state
                 this.automationInProgress = false;
                 this.hideCancelButton();
+                this.hideSkipButton();
                 
                 // Finish tracking and show summary
                 if (this.summaryWidget) {
@@ -3578,6 +4684,7 @@
         showCancelButton() {
             // Remove any existing cancel button
             this.hideCancelButton();
+            this.hideSkipButton();
             
             // Create cancel button overlay
             this.cancelButton = document.createElement('div');
@@ -3649,12 +4756,73 @@
             }
             
             document.body.appendChild(this.cancelButton);
+
+            // Also render skip button for current source
+            this.showSkipButton();
         }
         
         hideCancelButton() {
             if (this.cancelButton) {
                 this.cancelButton.remove();
                 this.cancelButton = null;
+            }
+        }
+
+        showSkipButton() {
+            // Remove existing skip button if any
+            this.hideSkipButton();
+
+            this.skipButton = document.createElement('div');
+            this.skipButton.id = 'automation-skip-overlay';
+            this.skipButton.style.cssText = `
+                position: fixed;
+                top: 130px;
+                right: 20px;
+                z-index: 10003;
+                background: linear-gradient(135deg, #ffaa00, #ff8800);
+                color: white;
+                padding: 10px 16px;
+                border-radius: 8px;
+                box-shadow: 0 4px 20px rgba(255, 136, 0, 0.3);
+                cursor: pointer;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 13px;
+                font-weight: bold;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                transition: all 0.2s ease;
+                animation: slideIn 0.2s ease;
+            `;
+
+            this.skipButton.innerHTML = `
+                <span style="font-size: 18px;">⏭️</span>
+                <span>Skip Current Source</span>
+            `;
+
+            this.skipButton.onmouseenter = () => {
+                this.skipButton.style.background = 'linear-gradient(135deg, #ffbb33, #ff9900)';
+                this.skipButton.style.transform = 'scale(1.05)';
+            };
+            this.skipButton.onmouseleave = () => {
+                this.skipButton.style.background = 'linear-gradient(135deg, #ffaa00, #ff8800)';
+                this.skipButton.style.transform = 'scale(1)';
+            };
+
+            this.skipButton.onclick = () => {
+                this.skipCurrentSourceRequested = true;
+                this.summaryWidget && this.summaryWidget.addWarning('User requested to skip current source');
+                this.updateSceneStatus('⏭️ Skipping current source...');
+                notifications.show('⏭️ Will skip current source', 'info');
+            };
+
+            document.body.appendChild(this.skipButton);
+        }
+
+        hideSkipButton() {
+            if (this.skipButton) {
+                this.skipButton.remove();
+                this.skipButton = null;
             }
         }
 
@@ -3737,92 +4905,246 @@
             return result;
         }
 
-        async scrapeStashDB() {
+    async scrapeStashDB() {
             this.updateSceneStatus('🔍 Scraping...');
-            
-            // Check for cancellation
-            if (this.automationCancelled) {
-                throw new Error('Automation cancelled');
-            }
+
+            if (this.automationCancelled) throw new Error('Automation cancelled');
+            if (this.skipCurrentSourceRequested) return { found: false, skip: true, reason: 'user skipped' };
 
             const scrapeBtn = this.findScrapeButton();
-            if (!scrapeBtn) {
-                throw new Error('Scrape button not found');
+            if (!scrapeBtn) throw new Error('Scrape button not found');
+
+            await this.clickFast(scrapeBtn);
+
+            // Wait for dropdown items to appear
+            try {
+                await this.waitForElement(['.dropdown-menu.show .dropdown-item', '.dropdown-menu .dropdown-item'], { timeout: 3000 });
+            } catch (_) {
+                if (this.skipCurrentSourceRequested) return { found: false, skip: true, reason: 'user skipped' };
             }
 
-            scrapeBtn.click();
-            await this.wait(1000).catch(err => {
-                if (err.message === 'Automation cancelled') throw err;
-            });
-            
-            // Check for cancellation again
-            if (this.automationCancelled) {
-                throw new Error('Automation cancelled');
-            }
+            if (this.automationCancelled) throw new Error('Automation cancelled');
 
-            // Look for StashDB option
             const options = document.querySelectorAll('.dropdown-menu .dropdown-item, a.dropdown-item');
             for (const option of options) {
-                if (option.textContent.toLowerCase().includes('stashdb') ||
-                    option.textContent.toLowerCase().includes('stash-box')) {
-                    option.click();
-                    await this.wait(3000).catch(err => {
-                        if (err.message === 'Automation cancelled') throw err;
-                    });
-                    return;
+                const t = option.textContent.toLowerCase();
+                if (t.includes('stashdb') || t.includes('stash-box')) {
+                    await this.clickFast(option);
+                    break;
                 }
             }
 
+            // Wait until either modal/edit form shows up
+            try {
+                await this.waitForElement(['.modal.show .modal-dialog', '.entity-edit-panel', '.scene-edit-details'], { timeout: 7000 });
+            } catch (_) {
+                if (this.skipCurrentSourceRequested) return { found: false, skip: true, reason: 'user skipped' };
+            }
+
+            // Detect outcome and warn if not found
+            const outcome = await this.detectScraperOutcome();
+            if (!outcome.found) {
+                const notFound = (outcome.reason || '').toLowerCase().includes('scene not found');
+                const reason = outcome.reason ? ` (${outcome.reason})` : '';
+                this.summaryWidget.addWarning(`StashDB: no match${reason}`);
+                notifications.show(`StashDB scraper found no scene${reason}`, 'warning');
+                return { found: false, skip: true, reason: outcome.reason, notFound };
+            }
+            return { found: true };
         }
 
-        async scrapeThePornDB() {
+    async scrapeThePornDB() {
             this.updateSceneStatus('🔍 Scraping...');
-            
-            // Check for cancellation
-            if (this.automationCancelled) {
-                throw new Error('Automation cancelled');
-            }
+
+            if (this.automationCancelled) throw new Error('Automation cancelled');
+            if (this.skipCurrentSourceRequested) return { found: false, skip: true, reason: 'user skipped' };
 
             const scrapeBtn = this.findScrapeButton();
-            if (!scrapeBtn) {
-                throw new Error('Scrape button not found');
+            if (!scrapeBtn) throw new Error('Scrape button not found');
+
+            await this.clickFast(scrapeBtn);
+
+            // Wait for dropdown items
+            try {
+                await this.waitForElement(['.dropdown-menu.show .dropdown-item', '.dropdown-menu .dropdown-item'], { timeout: 3000 });
+            } catch (_) {
+                if (this.skipCurrentSourceRequested) return { found: false, skip: true, reason: 'user skipped' };
             }
 
-            scrapeBtn.click();
-            await this.wait(1000).catch(err => {
-                if (err.message === 'Automation cancelled') throw err;
-            });
-            
-            // Check for cancellation again
-            if (this.automationCancelled) {
-                throw new Error('Automation cancelled');
-            }
+            if (this.automationCancelled) throw new Error('Automation cancelled');
 
-            // Look for ThePornDB option
             const options = document.querySelectorAll('.dropdown-menu .dropdown-item, a.dropdown-item');
             for (const option of options) {
-                if (option.textContent.toLowerCase().includes('theporndb') ||
-                    option.textContent.toLowerCase().includes('tpdb')) {
-                    option.click();
-                    await this.wait(3000).catch(err => {
-                        if (err.message === 'Automation cancelled') throw err;
-                    });
-                    return;
+                const t = option.textContent.toLowerCase();
+                if (t.includes('theporndb') || t.includes('tpdb')) {
+                    await this.clickFast(option);
+                    break;
                 }
             }
 
+            // Wait until modal/edit form shows up
+            try {
+                await this.waitForElement(['.modal.show .modal-dialog', '.entity-edit-panel', '.scene-edit-details'], { timeout: 7000 });
+            } catch (_) {
+                if (this.skipCurrentSourceRequested) return { found: false, skip: true, reason: 'user skipped' };
+            }
+
+            // Detect outcome and warn if not found
+            const outcome = await this.detectScraperOutcome();
+            if (!outcome.found) {
+                const notFound = (outcome.reason || '').toLowerCase().includes('scene not found');
+                const reason = outcome.reason ? ` (${outcome.reason})` : '';
+                this.summaryWidget.addWarning(`ThePornDB: no match${reason}`);
+                notifications.show(`ThePornDB scraper found no scene${reason}`, 'warning');
+                return { found: false, skip: true, reason: outcome.reason, notFound };
+            }
+            return { found: true };
         }
 
         findScrapeButton() {
+            // Cache per page lifecycle for performance
+            if (this._cachedScrapeBtn && document.body.contains(this._cachedScrapeBtn)) {
+                return this._cachedScrapeBtn;
+            }
 
-            const buttons = document.querySelectorAll('button');
-            for (const button of buttons) {
-                if (button.textContent.toLowerCase().includes('scrape')) {
-                    return button;
+            // Prefer common toolbar/button group locations first
+            const candidates = [
+                '.btn-group .btn, .btn-group button',
+                '.scraper-group button',
+                'button[data-toggle="dropdown"]',
+                'button'
+            ];
+            for (const sel of candidates) {
+                const list = document.querySelectorAll(sel);
+                for (const btn of list) {
+                    if (btn.textContent && btn.textContent.toLowerCase().includes('scrape')) {
+                        this._cachedScrapeBtn = btn;
+                        return btn;
+                    }
+                }
+            }
+            return null;
+        }
+
+        isEditPanelOpen() {
+            const fullSelectors = [
+                '.entity-edit-panel',
+                '.scene-edit-details',
+                '.edit-panel',
+                '.scene-edit-panel',
+                'form[class*="edit" i]',
+                '[data-testid*="edit" i]'
+            ];
+            const fullFound = fullSelectors.some(s => !!document.querySelector(s));
+            if (fullFound) return true;
+            // Heuristic only if quick edit isn't open
+            if (!this.isQuickEditOpen()) {
+                const btns = Array.from(document.querySelectorAll('button, .btn, input[type="submit"], input[type="button"]'));
+                const hasEditButtons = btns.some(b => {
+                    const t = (b.textContent || b.value || '').toLowerCase();
+                    return t.includes('save') || t.includes('apply');
+                });
+                return hasEditButtons;
+            }
+            return false;
+        }
+
+        isQuickEditOpen() {
+            const quickSelectors = [
+                '.quick-edit', '.quickedit', '.quick-edit-panel',
+                '[data-testid*="quick"][data-testid*="edit" i]',
+                '[class*="quick" i][class*="edit" i]'
+            ];
+            return quickSelectors.some(s => !!document.querySelector(s));
+        }
+
+        async openEditPanel() {
+            if (this.isEditPanelOpen()) return true;
+
+            this.updateSceneStatus('📝 Opening edit panel...');
+            const previousSkip = this.skipCurrentSourceRequested;
+            // Avoid a stale skip interfering with navigation
+            this.skipCurrentSourceRequested = false;
+
+            const waitEdit = async () => {
+                const targets = ['.entity-edit-panel', '.scene-edit-details', '.edit-panel', '.scene-edit-panel', 'form[class*="edit" i]', '[data-testid*="edit" i]'];
+                try {
+                    await this.waitForElement(targets, { timeout: 6000 });
+                    // Ensure we didn't open quick edit instead
+                    if (this.isQuickEditOpen() && !this.isEditPanelOpen()) return false;
+                    return true;
+                } catch (_) {
+                    // Final heuristic check
+                    if (this.isEditPanelOpen() && !this.isQuickEditOpen()) return true;
+                    // Brief fallback recheck
+                    await this.wait(300);
+                    return this.isEditPanelOpen() && !this.isQuickEditOpen();
+                }
+            };
+
+            // Strategy 1: Edit tab/link
+            let tab = null;
+            const sceneId = this.statusTracker.extractSceneId() || (window.location.pathname.match(/scenes\/(\d+)/)?.[1] ?? null);
+            const tabSelectors = [
+                sceneId ? `a[href$="/scenes/${sceneId}/edit"]` : null,
+                'a[href*="/scenes/" i][href$="/edit" i]',
+                'a[role="tab"][href*="edit" i]',
+                'a[href*="/edit" i]',
+                'a[class*="nav" i][href*="edit" i]'
+            ].filter(Boolean);
+            for (const s of tabSelectors) {
+                try { tab = document.querySelector(s); } catch (_) { tab = null; }
+                if (tab) break;
+            }
+            if (!tab) {
+                // Fallback: only consider anchors with href to avoid quick edit buttons
+                const candidates = Array.from(document.querySelectorAll('a[href]:not([disabled])'));
+                tab = candidates.find(el => {
+                    const href = (el.getAttribute('href') || '').toLowerCase();
+                    const text = (el.textContent || '').toLowerCase();
+                    return (href.includes('/edit') || text.includes('edit')) && !href.includes('quick');
+                }) || null;
+            }
+            if (tab) {
+                await this.clickFast(tab);
+                const ok = await waitEdit();
+                this.skipCurrentSourceRequested = previousSkip;
+                return ok;
+            }
+
+            // Strategy 2: button/link with title
+            const clickables = Array.from(document.querySelectorAll('button, a'));
+            const byTitle = clickables.find(el => (el.getAttribute('title') || '').toLowerCase().includes('edit'));
+            if (byTitle) {
+                await this.clickFast(byTitle);
+                const ok = await waitEdit();
+                this.skipCurrentSourceRequested = previousSkip;
+                return ok;
+            }
+
+            // Strategy 3: text content
+            const byText = clickables.find(el => (el.textContent || '').toLowerCase().includes('edit scene') || (el.textContent || '').toLowerCase().trim() === 'edit');
+            if (byText) {
+                await this.clickFast(byText);
+                const ok = await waitEdit();
+                this.skipCurrentSourceRequested = previousSkip;
+                return ok;
+            }
+
+            // Strategy 4: pencil icon
+            const icon = document.querySelector('svg[data-icon="pen"], i.fa-pen, i.fa-pencil-alt');
+            if (icon) {
+                const btn = icon.closest('button, a');
+                if (btn) {
+                    await this.clickFast(btn);
+                    const ok = await waitEdit();
+                    this.skipCurrentSourceRequested = previousSkip;
+                    return ok;
                 }
             }
 
-            return null;
+            this.skipCurrentSourceRequested = previousSkip;
+            return this.isEditPanelOpen();
         }
 
         
@@ -3841,8 +5163,8 @@
             };
 
             try {
-                // Wait a bit for the scraper results to fully render
-                await this.wait(1000);
+                // Short wait for the scraper results to render
+                await this.wait(400);
                 
                 // IMPORTANT: After scraping, Stash shows a comparison modal with TWO columns:
                 // LEFT column: Current/existing data (old)
@@ -4350,6 +5672,10 @@
             }
             
             try {
+                // Allow opting out via config
+                if (!getConfig(CONFIG.PREFER_HIGHER_RES_THUMBNAILS)) {
+                    return { shouldUpdate: false, reason: 'Preference disabled' };
+                }
                 // Get both resolutions in parallel
                 const [currentRes, scrapedRes] = await Promise.all([
                     this.getImageResolution(currentUrl),
@@ -4370,8 +5696,13 @@
                     reason: ''
                 };
                 
-                if (result.shouldUpdate) {
+                // Require minimum improvement threshold (e.g., >= 20%) to avoid churn
+                const minImprovement = 20;
+                if (result.shouldUpdate && (Number(improvementPercent) >= minImprovement || currentRes.pixels === 0)) {
                     result.reason = `Scraped thumbnail is ${improvementPercent}% larger (${scrapedRes.width}x${scrapedRes.height} vs ${currentRes.width}x${currentRes.height})`;
+                } else if (result.shouldUpdate) {
+                    result.shouldUpdate = false;
+                    result.reason = `Improvement ${improvementPercent}% below threshold`;
                 } else if (scrapedRes.pixels === currentRes.pixels) {
                     result.reason = 'Thumbnails have the same resolution';
                 } else {
@@ -4490,12 +5821,12 @@ async showScrapedDataConfirmation(scrapedData, hasScrapedSource = false) {
             thumbnailComparison = await this.compareThumbnails(currentThumbnail, scrapedData.thumbnail);
             
             // Store the comparison message for display
-            if (thumbnailComparison.shouldUpdate) {
+                if (thumbnailComparison.shouldUpdate) {
                 thumbnailMessage = `✅ Thumbnail: ${thumbnailComparison.improvementPercent}% larger (${thumbnailComparison.scrapedRes.width}x${thumbnailComparison.scrapedRes.height})`;
             } else {
                 thumbnailMessage = `⚠️ Thumbnail: Current is better (${thumbnailComparison.currentRes.width}x${thumbnailComparison.currentRes.height} vs ${thumbnailComparison.scrapedRes.width}x${thumbnailComparison.scrapedRes.height})`;
                 // Optionally filter out thumbnail if current is better
-                if (getConfig('PREFER_HIGHER_RES_THUMBNAILS')) {
+                    if (getConfig(CONFIG.PREFER_HIGHER_RES_THUMBNAILS)) {
                     delete scrapedData.thumbnail;
                     dataCount--;
                 }
@@ -4718,9 +6049,11 @@ async showScrapedDataConfirmation(scrapedData, hasScrapedSource = false) {
             }
         }
 
-        async organizeScene() {
+        async organizeScene({ fast = false } = {}) {
             this.updateSceneStatus('📁 Organizing scene...');
-            await this.wait(1000);
+            if (!fast) {
+                await this.wait(1000);
+            }
 
             // Double-check if already organized before proceeding
             const isAlreadyOrganized = await this.checkOrganizedStatus();
@@ -4739,23 +6072,33 @@ async showScrapedDataConfirmation(scrapedData, hasScrapedSource = false) {
             // Check button state and only click if not already organized
             if (!organizedToggle.checked) {
                 organizedToggle.click();
-                await this.wait(1500); // Wait for UI update
+                if (!fast) {
+                    await this.wait(1500); // Wait for UI update
+                } else {
+                    await this.wait(300); // Fast path
+                }
                 
                 // Verify the organization was successful
                 const newStatus = await this.checkOrganizedStatus();
                 if (newStatus) {
                     this.updateSceneStatus('✅ Organized');
+                    this._organizedAfterSave = true;
                 } else {
                     this.updateSceneStatus('⚠️ Organization status unclear');
                 }
                 
                 // Update status widget after organize change
-                await this.updateStatusAfterOrganize();
+                if (!fast) {
+                    await this.updateStatusAfterOrganize();
+                }
             } else {
                 this.updateSceneStatus('✅ Scene already organized');
+                this._organizedAfterSave = true;
                 
                 // Still update widget to ensure accuracy
-                await this.updateStatusAfterOrganize();
+                if (!fast) {
+                    await this.updateStatusAfterOrganize();
+                }
             }
         }
 
@@ -4784,8 +6127,16 @@ async showScrapedDataConfirmation(scrapedData, hasScrapedSource = false) {
                 const text = btn.textContent || btn.value || '';
                 if (text.toLowerCase().includes('save') && !btn.disabled) {
                     btn.click();
-                    await this.wait(2000);
-                    
+                    await this.wait(400);
+
+                    // Immediately attempt to organize after save (fast path), before status update
+                    try {
+                        await this.organizeScene({ fast: true });
+                        // organizeScene will set this._organizedAfterSave accordingly
+                    } catch (e) {
+                        // Non-fatal; organization may be handled later in the flow
+                    }
+
                     // Update status widget after save
                     await this.updateStatusAfterSave();
                     return;
@@ -4969,20 +6320,18 @@ async showScrapedDataConfirmation(scrapedData, hasScrapedSource = false) {
         const isScenePage = window.location.href.includes('/scenes/') && !window.location.href.includes('/scenes/markers');
         
         if (isScenePage) {
-            // Check if scene is already organized
-            await uiManager.wait(1000); // Wait for page to load
-            const isOrganized = await uiManager.checkOrganizedStatus();
-            
-            if (isOrganized) {
-                uiManager.createMinimizedButton();
-                uiManager.isMinimized = true;
-            } else {
-                uiManager.createPanel();
-            }
+            // Always show the full panel on scene pages for visibility
+            await uiManager.wait(500);
+            uiManager.createPanel();
+            // Post-init visibility check and self-heal
+            setTimeout(() => uiManager.ensurePanelVisible('post-init-250ms'), 250);
+            setTimeout(() => uiManager.ensurePanelVisible('post-init-1000ms'), 1000);
+            uiManager.debugVisibility('init-scene');
         } else {
             // On non-scene pages, always show minimized button
             uiManager.createMinimizedButton();
             uiManager.isMinimized = true;
+            uiManager.debugVisibility('init-non-scene');
         }
     }
 

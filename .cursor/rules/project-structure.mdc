@@ -1,0 +1,38 @@
+---
+alwaysApply: true
+---
+## AutomateStash Suite Project Structure
+
+- Main userscript entry: [AutomateStash-Final.js](mdc:AutomateStash-Final.js)
+- Additional userscripts: 
+  - [StashBulkOperations.js](mdc:StashBulkOperations.js)
+  - [StashQualityAnalyzer.js](mdc:StashQualityAnalyzer.js)
+  - [StashPerformanceMonitor.js](mdc:StashPerformanceMonitor.js)
+  - [StashPerformerManager.js](mdc:StashPerformerManager.js)
+  - [StashCollectionOrganizer.js](mdc:StashCollectionOrganizer.js)
+  - [StashExportImportTools.js](mdc:StashExportImportTools.js)
+  - Legacy reference: [AutomateStash.js](mdc:AutomateStash.js)
+
+- Native plugin implementation: [stash-plugin/](mdc:stash-plugin/README.md)
+  - Manifest: [stash-plugin/automate-stash.yml](mdc:stash-plugin/automate-stash.yml)
+  - Scripts: [stash-plugin/automate-stash-enhanced.js](mdc:stash-plugin/automate-stash-enhanced.js), [stash-plugin/automate-stash-compact.js](mdc:stash-plugin/automate-stash-compact.js)
+  - Install guide: [stash-plugin/INSTALLATION.md](mdc:stash-plugin/INSTALLATION.md)
+
+- Browser extension: [stash-suite-extension/](mdc:stash-suite-extension/README.md)
+  - Manifest: [stash-suite-extension/manifest.json](mdc:stash-suite-extension/manifest.json)
+  - Content scripts: [stash-suite-extension/src/content/main.js](mdc:stash-suite-extension/src/content/main.js)
+  - Background: [stash-suite-extension/src/background/service-worker.js](mdc:stash-suite-extension/src/background/service-worker.js)
+
+- Documentation: 
+  - Overview: [README.md](mdc:README.md)
+  - Roadmap: [ROADMAP.md](mdc:ROADMAP.md)
+  - Troubleshooting: [docs/TROUBLESHOOTING.md](mdc:docs/TROUBLESHOOTING.md)
+  - Architecture: [docs/ARCHITECTURE.md](mdc:docs/ARCHITECTURE.md)
+  - Automation Playbook: [docs/AUTOMATION-PLAYBOOK.md](mdc:docs/AUTOMATION-PLAYBOOK.md)
+  - Assistant guide: [CLAUDE.md](mdc:CLAUDE.md)
+
+## Key entry points and assumptions
+- Target app: Stash at `http://localhost:9998` with GraphQL endpoint `/graphql`.
+- Core classes in userscripts include `UIManager`, `NotificationManager`, `GraphQLClient`, and automation orchestrators (e.g., `startAutomation()`), primarily in [AutomateStash-Final.js](mdc:AutomateStash-Final.js).
+- The suite offers three deployment modes: userscripts, native plugin, and browser extension. Prefer consistency of behavior across modes.
+

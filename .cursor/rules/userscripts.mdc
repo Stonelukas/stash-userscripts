@@ -1,0 +1,33 @@
+---
+globs: AutomateStash*.js,Stash*.js
+description: Userscript-specific guidance (GM_* APIs, metadata headers, configuration)
+---
+## Userscript rules
+
+- Metadata header
+  - Keep `@match` scoped to `http://localhost:9998/*` and existing `@exclude` entries unless expanding intentionally
+  - Update `@version` when releasing a meaningful change
+  - Ensure required `@grant` entries are present for used GM APIs
+
+- Configuration
+  - Define new settings in `CONFIG` and defaults in `DEFAULTS`
+  - Persist via `GM_setValue`/`GM_getValue`
+  - Expose settings in the configuration dialog in [AutomateStash-Final.js](mdc:AutomateStash-Final.js) when user-facing
+
+- UI behavior
+  - Preserve minimized button behavior and global availability across Stash pages
+  - Keep status, notifications, and cancel/skip overlays consistent
+  - Duplicate Manager UI:
+    - Controls: accuracy (0/4/8/10), duration (-1/0/1/5/10)
+    - Prefer server pHash groups; local aHash as fallback
+    - Show title with filename fallback, metadata pills (tags, performers, organized), duration & file size
+    - Provide Ignore buttons: pair-level and group-level; persist in GM storage and hide immediately
+    - After merge, show confirm popup; open merged scene only after accept/reject; do not delete by default
+
+- Testing and deployment
+  - No build step; install as userscript and reload Stash to test
+  - Avoid network calls outside Stash and known scrapers unless documented
+  - Verify schema variants for delete/merge; use string IDs for safety
+
+Key files: [AutomateStash-Final.js](mdc:AutomateStash-Final.js), [StashBulkOperations.js](mdc:StashBulkOperations.js), [StashQualityAnalyzer.js](mdc:StashQualityAnalyzer.js)
+

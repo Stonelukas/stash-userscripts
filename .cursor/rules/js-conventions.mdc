@@ -1,0 +1,46 @@
+---
+globs: *.js
+description: JavaScript style and structural conventions for the AutomateStash suite
+---
+## JavaScript conventions
+
+- Naming
+  - Classes: PascalCase (e.g., `UIManager`, `NotificationManager`)
+  - Constants: SCREAMING_SNAKE_CASE (e.g., `STASH_CONFIG`, `CONFIG_KEYS`)
+  - Functions/variables: descriptive camelCase (avoid 1–2 letter names)
+
+- Control flow and errors
+  - Use guard clauses and return early on error/edge conditions
+  - Centralize waits/timeouts via `STASH_CONFIG` constants; avoid magic numbers
+  - Prefer element waits over arbitrary sleeps; debounce SPA observers
+
+- Comments and readability
+  - Keep comments focused on intent; avoid narrating obvious code
+  - Implement features instead of leaving TODOs where feasible
+
+- Userscript/extension differences
+  - Userscripts use `GM_*` storage; extension uses `chrome.storage` APIs
+  - Do not introduce GM APIs in plugin/extension code paths
+
+- Global state and logging
+  - Respect automation flags: `automationInProgress`, `automationCancelled`, `automationCompleted`
+  - Use `NotificationManager` and existing emoji-prefixed logging patterns
+
+- GraphQL and schema compatibility
+  - Use `/graphql` with optional `ApiKey` header
+  - Known field names: `rating100` (not `rating`), `frame_rate` (not `framerate`), `jobQueue` (not `jobStatus`), `paths.screenshot` (not `path`), some schemas omit `duration`
+  - Provide `per_page` where required and adapt to `FindFilterType`
+  - Prefer string IDs for mutations/inputs unless confirmed otherwise by introspection
+  - Scene merge: use `sceneMerge(input: { destination, source, values?, play_history?, o_history? })`. If sending `values`, include `values.id = destination`
+  - When building `SceneUpdateInput` for merge, include only present fields: `title`, `code`, `details`, `director`, `urls`, `date`, `rating100`, `studio_id`, `performer_ids`, `tag_ids`, `gallery_ids`
+  - Avoid `organized`/`group_ids` in merge override unless confirmed
+
+- UI/UX consistency
+  - Keep gradient/dark theme styles and smooth transitions consistent with existing widgets
+  - Avoid breaking the minimized widget and settings dialog behavior
+
+- Selector strategy
+  - Retain multi-strategy selector arrays for resilience across Stash versions
+  - Organize button: prefer `button[title="Organized"]`
+  - Apply/Save fallbacks include Bootstrap/test-id patterns used in existing code
+

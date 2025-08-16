@@ -1,0 +1,20 @@
+---
+globs: stash-plugin/**
+description: Native Stash plugin rules (manifest, scripts, debugging)
+---
+## Stash plugin rules
+
+- Structure
+  - Manifest: [stash-plugin/automate-stash.yml](mdc:stash-plugin/automate-stash.yml)
+  - Main scripts: [stash-plugin/automate-stash-enhanced.js](mdc:stash-plugin/automate-stash-enhanced.js), [stash-plugin/automate-stash-compact.js](mdc:stash-plugin/automate-stash-compact.js)
+  - Styles: [stash-plugin/automate-stash.css](mdc:stash-plugin/automate-stash.css)
+  - Debug helpers: [stash-plugin/debug-edit-panel-enhanced.js](mdc:stash-plugin/debug-edit-panel-enhanced.js)
+
+- Guidelines
+  - Do not use GM_* APIs; rely on Stash/plugin facilities
+  - Keep UI/UX consistent with userscripts where feasible
+  - Validate selectors against the Stash UI; maintain fallbacks
+
+- Install & troubleshooting
+  - Follow [stash-plugin/INSTALLATION.md](mdc:stash-plugin/INSTALLATION.md) and [stash-plugin/TROUBLESHOOTING.md](mdc:stash-plugin/TROUBLESHOOTING.md)
+

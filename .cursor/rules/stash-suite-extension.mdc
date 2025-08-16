@@ -1,0 +1,21 @@
+---
+globs: stash-suite-extension/**
+description: Browser extension rules (Manifest V3, content scripts, storage)
+---
+## Extension rules
+
+- Architecture
+  - Manifest V3: [stash-suite-extension/manifest.json](mdc:stash-suite-extension/manifest.json)
+  - Content loader: [stash-suite-extension/src/content/main.js](mdc:stash-suite-extension/src/content/main.js)
+  - Background: [stash-suite-extension/src/background/service-worker.js](mdc:stash-suite-extension/src/background/service-worker.js)
+  - Shared utilities: [stash-suite-extension/src/common/](mdc:stash-suite-extension/src/common/)
+
+- Guidelines
+  - Use `chrome.storage` for persistence; do not use GM_* APIs
+  - Keep permissions minimal and scoped to Stash origin
+  - Maintain feature parity with userscripts where possible
+
+- Dev workflow
+  - Load unpacked, make edits, then click Reload in `chrome://extensions/`
+  - See [stash-suite-extension/README.md](mdc:stash-suite-extension/README.md) and debug docs in that folder
+

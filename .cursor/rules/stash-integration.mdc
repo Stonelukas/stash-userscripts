@@ -1,0 +1,46 @@
+---
+globs: *.js
+description: Stash integration patterns (GraphQL, SPA timing, selectors) to keep automation reliable
+---
+## Stash integration rules
+
+- Endpoint and auth
+  - Base address defaults to `http://localhost:9998`; GraphQL at `/graphql`
+  - Include `ApiKey` header when configured in settings
+
+- SPA navigation and timing
+  - Use debounced MutationObservers for route changes
+  - Use `waitForElement*` helpers and `STASH_CONFIG.REACT_RENDER_DELAY` before interacting
+  - Prefer element presence/visibility checks over fixed delays
+
+- Selectors and flows
+  - Organize control: `button[title="Organized"]`
+  - Scrape flow: click main scrape button, then choose provider from `.dropdown-menu .dropdown-item`
+  - Save/apply: keep Bootstrap/test-id fallbacks as in [AutomateStash-Final.js](mdc:AutomateStash-Final.js)
+
+- Source detection and skip logic
+  - Prefer GraphQL-based detection (via `SourceDetector`) with DOM fallback
+  - Maintain skip logic for already-scraped sources; expose re-scrape UI if detected
+
+- GraphQL guidelines
+  - Use the shared `GraphQLClient` with request coalescing and TTL caching
+  - Validate field names against Stash schema; update queries for schema changes
+  - Handle errors gracefully; surface user-friendly notifications
+  - Duplicate detection:
+    - Server: prefer `findDuplicateScenes(distance, duration_diff)` (Exact=0, High=4, Medium=8, Low=10; duration -1 disables)
+    - Client aHash scan is fallback only
+  - Merge policy:
+    - Destination: pick largest `files[0].size` in group
+    - If destination lacks metadata, send `values` built from first source with metadata (fields per js-conventions)
+    - Open merged scene only after user accepts/rejects post-merge prompt
+  - Ignore logic:
+    - Local pair ignore: save sorted pair to `duplicate_ignore_pairs`
+    - Server group ignore: save sorted group ids to `duplicate_ignore_groups`
+    - Skip ignored entries on render; remove ignored rows immediately in UI
+
+- Performance
+  - Avoid busy-wait loops; use event-driven updates where possible
+  - Keep UI responsive; long operations should update progress/status
+
+References: [README.md](mdc:README.md), [ROADMAP.md](mdc:ROADMAP.md), [CLAUDE.md](mdc:CLAUDE.md)
+

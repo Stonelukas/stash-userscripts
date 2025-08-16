@@ -1,0 +1,4 @@
+{
+    "bun.runtime": "/home/stonelukas/.local/share/mise/shims/bun",
+    "python.defaultInterpreterPath": "/home/stonelukas/.local/share/mise/installs/python/3.11.6/bin/python"
+}
