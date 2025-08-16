@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AutomateStash Final Enhanced
 // @namespace    https://github.com/Stonelukas/stash-userscripts
-// @version      5.0.4
+// @version      5.2.0
 // @description  AutomateStash - with performance enhancements and post-automation summary widget
 // @author       AutomateStash Team
 // @match        http://localhost:9998/*
@@ -2845,9 +2845,9 @@
             header.style.cursor = 'move';
             header.style.userSelect = 'none';
 
-            // Add event listeners
+            // Add event listeners (non-passive for mousemove to allow preventDefault)
             header.addEventListener('mousedown', dragStart);
-            document.addEventListener('mousemove', dragMove);
+            document.addEventListener('mousemove', dragMove, { passive: false });
             document.addEventListener('mouseup', dragEnd);
         }
     }
@@ -2918,6 +2918,914 @@
             } catch (_) { }
 
         }
+        showEnhancedSettings() {
+            // Close any existing dialog
+            const existing = document.getElementById('enhanced-settings-dialog');
+            if (existing) existing.remove();
+
+            const dialog = document.createElement('div');
+            dialog.id = 'enhanced-settings-dialog';
+            dialog.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, #1e2936 0%, #2c3e50 100%);
+                border-radius: 12px;
+                padding: 0;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+                z-index: 10001;
+                width: 800px;
+                max-width: 90vw;
+                max-height: 80vh;
+                overflow: hidden;
+                border: 1px solid rgba(255,255,255,0.1);
+            `;
+
+            // Header with tabs
+            const header = document.createElement('div');
+            header.style.cssText = `
+                padding: 20px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+                background: rgba(0,0,0,0.2);
+            `;
+
+            const title = document.createElement('h2');
+            title.textContent = '🚀 Enhanced Settings';
+            title.style.cssText = `
+                margin: 0 0 15px 0;
+                color: #ecf0f1;
+                font-size: 20px;
+                font-weight: 600;
+            `;
+            header.appendChild(title);
+
+            // Tab navigation
+            const tabs = document.createElement('div');
+            tabs.style.cssText = `
+                display: flex;
+                gap: 10px;
+                flex-wrap: wrap;
+            `;
+
+            const tabButtons = [];
+            const tabContents = [];
+
+            const createTab = (name, icon, content) => {
+                const button = document.createElement('button');
+                button.textContent = `${icon} ${name}`;
+                button.style.cssText = `
+                    padding: 8px 16px;
+                    background: rgba(255,255,255,0.1);
+                    border: 1px solid rgba(255,255,255,0.2);
+                    color: #ecf0f1;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    font-size: 13px;
+                `;
+                
+                button.addEventListener('click', () => {
+                    // Reset all tabs
+                    tabButtons.forEach(b => {
+                        b.style.background = 'rgba(255,255,255,0.1)';
+                        b.style.borderColor = 'rgba(255,255,255,0.2)';
+                    });
+                    tabContents.forEach(c => c.style.display = 'none');
+                    
+                    // Activate this tab
+                    button.style.background = '#3498db';
+                    button.style.borderColor = '#3498db';
+                    content.style.display = 'block';
+                });
+
+                tabButtons.push(button);
+                tabContents.push(content);
+                tabs.appendChild(button);
+                
+                return content;
+            };
+
+            header.appendChild(tabs);
+            dialog.appendChild(header);
+
+            // Content container
+            const contentContainer = document.createElement('div');
+            contentContainer.style.cssText = `
+                padding: 20px;
+                overflow-y: auto;
+                max-height: calc(80vh - 120px);
+            `;
+            dialog.appendChild(contentContainer);
+
+            // Create tab contents
+            const performanceContent = this.createPerformanceTab();
+            const themeContent = this.createThemeTab();
+            const cacheContent = this.createCacheTab();
+            const keyboardContent = this.createKeyboardTab();
+            const animationContent = this.createAnimationTab();
+            const configContent = this.createConfigTab();
+
+            // Add tabs
+            createTab('Performance', '📊', performanceContent);
+            createTab('Themes', '🎨', themeContent);
+            createTab('Cache', '💾', cacheContent);
+            createTab('Keyboard', '⌨️', keyboardContent);
+            createTab('Animations', '✨', animationContent);
+            createTab('Config', '⚙️', configContent);
+
+            // Add all contents to container
+            [performanceContent, themeContent, cacheContent, keyboardContent, animationContent, configContent].forEach(content => {
+                content.style.display = 'none';
+                contentContainer.appendChild(content);
+            });
+
+            // Show first tab by default
+            tabButtons[0].click();
+
+            // Close button
+            const closeBtn = document.createElement('button');
+            closeBtn.innerHTML = '✕';
+            closeBtn.style.cssText = `
+                position: absolute;
+                top: 20px;
+                right: 20px;
+                background: rgba(255,255,255,0.2);
+                border: none;
+                color: white;
+                width: 30px;
+                height: 30px;
+                border-radius: 50%;
+                cursor: pointer;
+                font-size: 18px;
+                transition: all 0.2s;
+            `;
+            closeBtn.addEventListener('click', () => dialog.remove());
+            dialog.appendChild(closeBtn);
+
+            // Add animation if available
+            document.body.appendChild(dialog);
+            if (window.animationController && window.animationController.animate) {
+                window.animationController.animate(dialog, 'fadeInScale', {
+                    duration: 300,
+                    easing: 'ease-out'
+                });
+            }
+        }
+
+        createPerformanceTab() {
+            const container = document.createElement('div');
+            
+            const title = document.createElement('h3');
+            title.textContent = 'Performance Metrics';
+            title.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
+            container.appendChild(title);
+
+            // Performance score
+            const scoreDiv = document.createElement('div');
+            scoreDiv.style.cssText = `
+                background: rgba(0,0,0,0.3);
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 15px;
+            `;
+            
+            const updateScore = () => {
+                const score = window.performanceConfigManager ? 
+                    window.performanceConfigManager.getPerformanceScore() : 'N/A';
+                const metrics = window.performanceMonitor ? 
+                    window.performanceMonitor.getSummary() : {};
+                
+                scoreDiv.innerHTML = `
+                    <div style="font-size: 24px; color: #3498db; margin-bottom: 10px;">
+                        Performance Score: ${score}/100
+                    </div>
+                    <div style="color: #95a5a6; font-size: 13px;">
+                        <div>Average Execution Time: ${metrics.averageExecutionTime?.toFixed(2) || 'N/A'} ms</div>
+                        <div>Total Operations: ${metrics.totalOperations || 0}</div>
+                        <div>Cache Hit Rate: ${metrics.cacheHitRate || 'N/A'}%</div>
+                        <div>Memory Usage: ${metrics.memoryUsage ? (metrics.memoryUsage / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}</div>
+                    </div>
+                `;
+            };
+            
+            updateScore();
+            setInterval(updateScore, 2000);
+            container.appendChild(scoreDiv);
+
+            // Performance profile selector
+            const profileDiv = document.createElement('div');
+            profileDiv.style.cssText = 'margin-bottom: 15px;';
+            profileDiv.innerHTML = `
+                <label style="color: #ecf0f1; display: block; margin-bottom: 5px;">Performance Profile:</label>
+                <select id="perf-profile" style="
+                    width: 100%;
+                    padding: 8px;
+                    background: rgba(255,255,255,0.1);
+                    border: 1px solid rgba(255,255,255,0.2);
+                    color: white;
+                    border-radius: 4px;
+                ">
+                    <option value="balanced">Balanced</option>
+                    <option value="performance">Performance</option>
+                    <option value="lowResource">Low Resource</option>
+                    <option value="debug">Debug</option>
+                </select>
+            `;
+            
+            const profileSelect = profileDiv.querySelector('select');
+            profileSelect.addEventListener('change', (e) => {
+                if (window.performanceConfigManager) {
+                    window.performanceConfigManager.applyProfile(e.target.value);
+                    notifications.show(`Applied ${e.target.value} profile`, 'success');
+                    updateScore();
+                }
+            });
+            
+            container.appendChild(profileDiv);
+
+            // Clear metrics button
+            const clearBtn = document.createElement('button');
+            clearBtn.textContent = 'Clear Metrics';
+            clearBtn.style.cssText = `
+                background: #e74c3c;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+                margin-top: 10px;
+            `;
+            clearBtn.addEventListener('click', () => {
+                if (window.performanceMonitor && window.performanceMonitor.clear) {
+                    window.performanceMonitor.clear();
+                    notifications.show('Performance metrics cleared', 'success');
+                    updateScore();
+                }
+            });
+            container.appendChild(clearBtn);
+
+            return container;
+        }
+
+        createThemeTab() {
+            const container = document.createElement('div');
+            
+            const title = document.createElement('h3');
+            title.textContent = 'Theme Settings';
+            title.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
+            container.appendChild(title);
+
+            const themes = ['dark', 'light', 'midnight', 'ocean'];
+            const themeGrid = document.createElement('div');
+            themeGrid.style.cssText = `
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 15px;
+                margin-bottom: 20px;
+            `;
+
+            themes.forEach(themeName => {
+                const themeCard = document.createElement('div');
+                themeCard.style.cssText = `
+                    background: rgba(0,0,0,0.3);
+                    padding: 15px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    border: 2px solid transparent;
+                `;
+                
+                themeCard.innerHTML = `
+                    <div style="font-weight: bold; color: #ecf0f1; margin-bottom: 5px;">
+                        ${themeName.charAt(0).toUpperCase() + themeName.slice(1)}
+                    </div>
+                    <div style="color: #95a5a6; font-size: 12px;">
+                        ${themeName === 'dark' ? 'Default dark theme' :
+                          themeName === 'light' ? 'Bright light theme' :
+                          themeName === 'midnight' ? 'Deep blue theme' :
+                          'Ocean blue theme'}
+                    </div>
+                `;
+                
+                themeCard.addEventListener('click', () => {
+                    if (window.themeManager && window.themeManager.applyTheme) {
+                        window.themeManager.applyTheme(themeName);
+                        notifications.show(`Applied ${themeName} theme`, 'success');
+                        
+                        // Update selection
+                        themeGrid.querySelectorAll('div').forEach(card => {
+                            card.style.borderColor = 'transparent';
+                        });
+                        themeCard.style.borderColor = '#3498db';
+                    }
+                });
+                
+                themeGrid.appendChild(themeCard);
+            });
+            
+            container.appendChild(themeGrid);
+
+            // Custom CSS input
+            const customDiv = document.createElement('div');
+            customDiv.innerHTML = `
+                <label style="color: #ecf0f1; display: block; margin-bottom: 5px;">Custom CSS:</label>
+                <textarea id="custom-css" style="
+                    width: 100%;
+                    height: 100px;
+                    padding: 10px;
+                    background: rgba(255,255,255,0.1);
+                    border: 1px solid rgba(255,255,255,0.2);
+                    color: white;
+                    border-radius: 4px;
+                    font-family: monospace;
+                " placeholder="Enter custom CSS here..."></textarea>
+            `;
+            
+            const applyCustomBtn = document.createElement('button');
+            applyCustomBtn.textContent = 'Apply Custom CSS';
+            applyCustomBtn.style.cssText = `
+                background: #3498db;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+                margin-top: 10px;
+            `;
+            applyCustomBtn.addEventListener('click', () => {
+                const css = customDiv.querySelector('textarea').value;
+                if (css && window.themeManager && window.themeManager.applyCustomCSS) {
+                    window.themeManager.applyCustomCSS(css);
+                    notifications.show('Custom CSS applied', 'success');
+                }
+            });
+            
+            customDiv.appendChild(applyCustomBtn);
+            container.appendChild(customDiv);
+
+            return container;
+        }
+
+        createCacheTab() {
+            const container = document.createElement('div');
+            
+            const title = document.createElement('h3');
+            title.textContent = 'Cache Statistics';
+            title.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
+            container.appendChild(title);
+
+            const statsDiv = document.createElement('div');
+            statsDiv.style.cssText = `
+                background: rgba(0,0,0,0.3);
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 15px;
+            `;
+            
+            const updateStats = () => {
+                const stats = window.cacheManager ? 
+                    window.cacheManager.getAllStats() : {};
+                
+                let html = '<div style="color: #ecf0f1;">';
+                
+                if (stats.global) {
+                    html += `
+                        <h4 style="margin-bottom: 10px;">Global Statistics</h4>
+                        <div style="color: #95a5a6; font-size: 13px;">
+                            <div>Total Requests: ${stats.global.requests || 0}</div>
+                            <div>Cache Hits: ${stats.global.hits || 0}</div>
+                            <div>Hit Rate: ${stats.global.hitRate || '0'}%</div>
+                            <div>Total Size: ${stats.global.totalSize ? (stats.global.totalSize / 1024).toFixed(2) + ' KB' : 'N/A'}</div>
+                        </div>
+                    `;
+                }
+                
+                if (stats.stores) {
+                    html += '<h4 style="margin-top: 15px; margin-bottom: 10px;">Store Statistics</h4>';
+                    Object.entries(stats.stores).forEach(([name, store]) => {
+                        html += `
+                            <div style="margin-bottom: 10px;">
+                                <strong>${name}:</strong>
+                                <div style="color: #95a5a6; font-size: 12px; margin-left: 10px;">
+                                    Size: ${store.size || 0} | Hits: ${store.hits || 0} | Misses: ${store.misses || 0}
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                
+                html += '</div>';
+                statsDiv.innerHTML = html;
+            };
+            
+            updateStats();
+            setInterval(updateStats, 2000);
+            container.appendChild(statsDiv);
+
+            // Cache control buttons
+            const buttonsDiv = document.createElement('div');
+            buttonsDiv.style.cssText = 'display: flex; gap: 10px;';
+            
+            const clearCacheBtn = document.createElement('button');
+            clearCacheBtn.textContent = 'Clear All Cache';
+            clearCacheBtn.style.cssText = `
+                background: #e74c3c;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+            `;
+            clearCacheBtn.addEventListener('click', () => {
+                if (window.cacheManager) {
+                    window.cacheManager.cleanup();
+                    if (window.graphQLCache) {
+                        window.graphQLCache.invalidate();
+                    }
+                    notifications.show('Cache cleared', 'success');
+                    updateStats();
+                }
+            });
+            
+            const warmupBtn = document.createElement('button');
+            warmupBtn.textContent = 'Warm Cache';
+            warmupBtn.style.cssText = `
+                background: #27ae60;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+            `;
+            warmupBtn.addEventListener('click', () => {
+                if (window.graphQLCache && window.graphQLCache.warmup) {
+                    window.graphQLCache.warmup();
+                    notifications.show('Cache warmed up', 'success');
+                    updateStats();
+                }
+            });
+            
+            buttonsDiv.appendChild(clearCacheBtn);
+            buttonsDiv.appendChild(warmupBtn);
+            container.appendChild(buttonsDiv);
+
+            return container;
+        }
+
+        createKeyboardTab() {
+            const container = document.createElement('div');
+            
+            const title = document.createElement('h3');
+            title.textContent = 'Keyboard Shortcuts';
+            title.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
+            container.appendChild(title);
+
+            const shortcuts = [
+                { key: 'Ctrl+Shift+A', action: 'Start Automation', category: 'Automation' },
+                { key: 'Ctrl+Shift+S', action: 'Open Settings', category: 'UI' },
+                { key: 'Escape', action: 'Cancel Automation', category: 'Automation' },
+                { key: 'Ctrl+Shift+M', action: 'Minimize Panel', category: 'UI' },
+                { key: 'Ctrl+Shift+E', action: 'Expand Panel', category: 'UI' },
+                { key: 'Ctrl+Shift+H', action: 'Show Health Dashboard', category: 'UI' },
+                { key: 'Ctrl+Shift+C', action: 'Clear Cache', category: 'Performance' },
+                { key: 'Ctrl+Shift+P', action: 'Performance Metrics', category: 'Performance' }
+            ];
+
+            const table = document.createElement('table');
+            table.style.cssText = `
+                width: 100%;
+                border-collapse: collapse;
+            `;
+            
+            const thead = document.createElement('thead');
+            thead.innerHTML = `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.2);">
+                    <th style="text-align: left; padding: 10px; color: #ecf0f1;">Shortcut</th>
+                    <th style="text-align: left; padding: 10px; color: #ecf0f1;">Action</th>
+                    <th style="text-align: left; padding: 10px; color: #ecf0f1;">Category</th>
+                </tr>
+            `;
+            table.appendChild(thead);
+            
+            const tbody = document.createElement('tbody');
+            shortcuts.forEach(shortcut => {
+                const row = document.createElement('tr');
+                row.style.cssText = 'border-bottom: 1px solid rgba(255,255,255,0.1);';
+                row.innerHTML = `
+                    <td style="padding: 10px;">
+                        <kbd style="
+                            background: rgba(255,255,255,0.2);
+                            padding: 3px 6px;
+                            border-radius: 3px;
+                            font-family: monospace;
+                            color: #ecf0f1;
+                        ">${shortcut.key}</kbd>
+                    </td>
+                    <td style="padding: 10px; color: #95a5a6;">${shortcut.action}</td>
+                    <td style="padding: 10px; color: #95a5a6;">${shortcut.category}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            table.appendChild(tbody);
+            
+            container.appendChild(table);
+
+            return container;
+        }
+
+        createAnimationTab() {
+            const container = document.createElement('div');
+            
+            const title = document.createElement('h3');
+            title.textContent = 'Animation Settings';
+            title.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
+            container.appendChild(title);
+
+            // Animation toggle
+            const toggleDiv = document.createElement('div');
+            toggleDiv.style.cssText = 'margin-bottom: 20px;';
+            toggleDiv.innerHTML = `
+                <label style="display: flex; align-items: center; color: #ecf0f1;">
+                    <input type="checkbox" id="animations-enabled" checked style="margin-right: 10px;">
+                    Enable Animations
+                </label>
+            `;
+            
+            const animToggle = toggleDiv.querySelector('input');
+            animToggle.addEventListener('change', (e) => {
+                if (window.animationController) {
+                    if (e.target.checked) {
+                        window.animationController.enable();
+                    } else {
+                        window.animationController.disable();
+                    }
+                    notifications.show(`Animations ${e.target.checked ? 'enabled' : 'disabled'}`, 'success');
+                }
+            });
+            container.appendChild(toggleDiv);
+
+            // Animation speed
+            const speedDiv = document.createElement('div');
+            speedDiv.style.cssText = 'margin-bottom: 20px;';
+            speedDiv.innerHTML = `
+                <label style="color: #ecf0f1; display: block; margin-bottom: 5px;">Animation Speed:</label>
+                <input type="range" id="anim-speed" min="0.5" max="2" step="0.1" value="1" style="width: 100%;">
+                <div style="display: flex; justify-content: space-between; color: #95a5a6; font-size: 12px;">
+                    <span>Slow</span>
+                    <span id="speed-value">1x</span>
+                    <span>Fast</span>
+                </div>
+            `;
+            
+            const speedSlider = speedDiv.querySelector('input');
+            const speedValue = speedDiv.querySelector('#speed-value');
+            speedSlider.addEventListener('input', (e) => {
+                const speed = parseFloat(e.target.value);
+                speedValue.textContent = `${speed}x`;
+                if (window.animationController && window.animationController.setSpeed) {
+                    window.animationController.setSpeed(speed);
+                }
+            });
+            container.appendChild(speedDiv);
+
+            // Animation preview
+            const previewDiv = document.createElement('div');
+            previewDiv.innerHTML = `
+                <h4 style="color: #ecf0f1; margin-bottom: 10px;">Animation Preview</h4>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+            `;
+            
+            const animations = ['fadeIn', 'slideIn', 'bounce', 'pulse', 'shake', 'zoom'];
+            animations.forEach(anim => {
+                const btn = document.createElement('button');
+                btn.textContent = anim;
+                btn.style.cssText = `
+                    background: rgba(255,255,255,0.1);
+                    border: 1px solid rgba(255,255,255,0.2);
+                    color: white;
+                    padding: 8px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                `;
+                btn.addEventListener('click', () => {
+                    if (window.animationController && window.animationController.animate) {
+                        window.animationController.animate(btn, anim, {
+                            duration: 500
+                        });
+                    }
+                });
+                previewDiv.appendChild(btn);
+            });
+            
+            container.appendChild(previewDiv);
+
+            return container;
+        }
+
+        createConfigTab() {
+            const container = document.createElement('div');
+            
+            const title = document.createElement('h3');
+            title.textContent = 'Performance Configuration';
+            title.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
+            container.appendChild(title);
+
+            // Export/Import config
+            const backupDiv = document.createElement('div');
+            backupDiv.style.cssText = 'margin-bottom: 20px;';
+            backupDiv.innerHTML = `
+                <h4 style="color: #ecf0f1; margin-bottom: 10px;">Configuration Backup</h4>
+                <div style="display: flex; gap: 10px;">
+            `;
+            
+            const exportBtn = document.createElement('button');
+            exportBtn.textContent = 'Export Config';
+            exportBtn.style.cssText = `
+                background: #27ae60;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+            `;
+            exportBtn.addEventListener('click', () => {
+                if (window.performanceConfigManager) {
+                    const config = window.performanceConfigManager.export();
+                    const blob = new Blob([config], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `stash-performance-config-${Date.now()}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    notifications.show('Configuration exported', 'success');
+                }
+            });
+            
+            const importBtn = document.createElement('button');
+            importBtn.textContent = 'Import Config';
+            importBtn.style.cssText = `
+                background: #3498db;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+            `;
+            importBtn.addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'application/json';
+                input.addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    if (file && window.performanceConfigManager) {
+                        const text = await file.text();
+                        if (window.performanceConfigManager.import(text)) {
+                            notifications.show('Configuration imported', 'success');
+                        } else {
+                            notifications.show('Import failed', 'error');
+                        }
+                    }
+                });
+                input.click();
+            });
+            
+            backupDiv.appendChild(exportBtn);
+            backupDiv.appendChild(importBtn);
+            container.appendChild(backupDiv);
+
+            // Optimization suggestions
+            const suggestionsDiv = document.createElement('div');
+            suggestionsDiv.style.cssText = `
+                background: rgba(0,0,0,0.3);
+                padding: 15px;
+                border-radius: 8px;
+            `;
+            
+            const updateSuggestions = () => {
+                const suggestions = window.performanceConfigManager ? 
+                    window.performanceConfigManager.getOptimizationSuggestions() : [];
+                
+                let html = '<h4 style="color: #ecf0f1; margin-bottom: 10px;">Optimization Suggestions</h4>';
+                
+                if (suggestions.length > 0) {
+                    suggestions.forEach(suggestion => {
+                        const color = suggestion.priority === 'high' ? '#e74c3c' : 
+                                     suggestion.priority === 'medium' ? '#f39c12' : '#95a5a6';
+                        html += `
+                            <div style="margin-bottom: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px;">
+                                <div style="color: ${color}; font-weight: bold;">${suggestion.message}</div>
+                                <div style="color: #95a5a6; font-size: 12px; margin-top: 5px;">${suggestion.action}</div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    html += '<div style="color: #27ae60;">✅ No optimization needed - performance is optimal!</div>';
+                }
+                
+                suggestionsDiv.innerHTML = html;
+            };
+            
+            updateSuggestions();
+            setInterval(updateSuggestions, 5000);
+            container.appendChild(suggestionsDiv);
+
+            return container;
+        }
+
+        /**
+         * Create floating performance metrics widget
+         */
+        createPerformanceWidget() {
+            // Remove existing widget if any
+            const existing = document.getElementById('stash-performance-widget');
+            if (existing) existing.remove();
+
+            const widget = document.createElement('div');
+            widget.id = 'stash-performance-widget';
+            widget.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                left: 20px;
+                z-index: 9998;
+                background: linear-gradient(135deg, rgba(30,30,40,0.95) 0%, rgba(40,40,60,0.95) 100%);
+                border: 1px solid rgba(102,126,234,0.3);
+                border-radius: 12px;
+                padding: 12px;
+                min-width: 200px;
+                max-width: 300px;
+                backdrop-filter: blur(10px);
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                font-size: 11px;
+                color: rgba(255,255,255,0.9);
+                transition: all 0.3s ease;
+                cursor: move;
+            `;
+
+            // Header
+            const header = document.createElement('div');
+            header.style.cssText = `
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+                padding-bottom: 8px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+            `;
+
+            const title = document.createElement('div');
+            title.innerHTML = '⚡ <strong>Performance</strong>';
+            title.style.cssText = `
+                font-size: 12px;
+                color: #667eea;
+            `;
+
+            const toggleBtn = document.createElement('button');
+            toggleBtn.textContent = '−';
+            toggleBtn.style.cssText = `
+                background: transparent;
+                border: none;
+                color: rgba(255,255,255,0.6);
+                cursor: pointer;
+                font-size: 16px;
+                padding: 0;
+                width: 20px;
+                height: 20px;
+            `;
+
+            header.appendChild(title);
+            header.appendChild(toggleBtn);
+
+            // Metrics container
+            const metrics = document.createElement('div');
+            metrics.id = 'performance-metrics-content';
+            metrics.style.cssText = `
+                display: grid;
+                gap: 6px;
+            `;
+
+            widget.appendChild(header);
+            widget.appendChild(metrics);
+            document.body.appendChild(widget);
+
+            // Make widget draggable
+            this.makePerformanceWidgetDraggable(widget, header);
+
+            // Toggle expand/collapse
+            let expanded = true;
+            toggleBtn.addEventListener('click', () => {
+                expanded = !expanded;
+                metrics.style.display = expanded ? 'grid' : 'none';
+                toggleBtn.textContent = expanded ? '−' : '+';
+                widget.style.minWidth = expanded ? '200px' : '120px';
+            });
+
+            // Start updating metrics
+            this.updatePerformanceMetrics();
+            setInterval(() => this.updatePerformanceMetrics(), 2000);
+
+            // Apply entrance animation
+            if (window.animationController) {
+                window.animationController.animate(widget, 'fadeIn', {
+                    duration: 500
+                });
+            }
+        }
+
+        makePerformanceWidgetDraggable(widget, handle) {
+            let isDragging = false;
+            let currentX;
+            let currentY;
+            let initialX;
+            let initialY;
+
+            handle.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                initialX = e.clientX - widget.offsetLeft;
+                initialY = e.clientY - widget.offsetTop;
+                widget.style.transition = 'none';
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                e.preventDefault();
+                currentX = e.clientX - initialX;
+                currentY = e.clientY - initialY;
+                widget.style.left = currentX + 'px';
+                widget.style.top = 'auto';
+                widget.style.bottom = (window.innerHeight - currentY - widget.offsetHeight) + 'px';
+            }, { passive: false });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+                widget.style.transition = 'all 0.3s ease';
+            });
+        }
+
+        updatePerformanceMetrics() {
+            const container = document.getElementById('performance-metrics-content');
+            if (!container) return;
+
+            const metrics = [];
+
+            // Get performance stats
+            if (window.performanceMonitor) {
+                const summary = window.performanceMonitor.getSummary();
+                metrics.push({
+                    label: 'Avg Execution',
+                    value: summary.averageExecutionTime ? `${summary.averageExecutionTime.toFixed(1)}ms` : '0ms',
+                    color: summary.averageExecutionTime > 100 ? '#e74c3c' : '#27ae60'
+                });
+                metrics.push({
+                    label: 'DOM Ops',
+                    value: summary.totalDOMOperations || 0,
+                    color: summary.totalDOMOperations > 50 ? '#e67e22' : '#27ae60'
+                });
+            }
+
+            // Get cache stats
+            if (window.cacheManager) {
+                const stats = window.cacheManager.getAllStats();
+                if (stats.global) {
+                    metrics.push({
+                        label: 'Cache Hit Rate',
+                        value: stats.global.hitRate || '0%',
+                        color: parseFloat(stats.global.hitRate) > 70 ? '#27ae60' : '#e67e22'
+                    });
+                }
+            }
+
+            // Memory usage
+            if (performance.memory) {
+                const mb = (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1);
+                metrics.push({
+                    label: 'Memory',
+                    value: `${mb}MB`,
+                    color: performance.memory.usedJSHeapSize > 100 * 1024 * 1024 ? '#e74c3c' : '#27ae60'
+                });
+            }
+
+            // Performance score
+            if (window.performanceConfigManager) {
+                const score = window.performanceConfigManager.getPerformanceScore();
+                metrics.push({
+                    label: 'Score',
+                    value: `${score}/100`,
+                    color: score > 80 ? '#27ae60' : score > 60 ? '#e67e22' : '#e74c3c'
+                });
+            }
+
+            // Render metrics
+            container.innerHTML = metrics.map(m => `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: rgba(255,255,255,0.6);">${m.label}:</span>
+                    <span style="color: ${m.color}; font-weight: 600;">${m.value}</span>
+                </div>
+            `).join('');
+        }
+
         async showHealthDashboard() {
             // Remove existing
             const existing = document.querySelector('#as-health-wrap');
@@ -3109,9 +4017,9 @@
 
             };
 
-            // Add event listeners (passive where safe)
+            // Add event listeners (passive only where safe - not for mousemove since we need preventDefault)
             dragHandle.addEventListener('mousedown', dragStart, { passive: true });
-            document.addEventListener('mousemove', dragMove, { passive: true });
+            document.addEventListener('mousemove', dragMove, { passive: false });
             document.addEventListener('mouseup', dragEnd, { passive: true });
             // Clean up on element removal
             const observer = new MutationObserver((mutations) => {
@@ -3483,9 +4391,13 @@
         createPanel() {
             this.cleanup();
 
-            // Initialize summary widget if not already created
+            // Use global summary widget if available, otherwise create local one
             if (!this.summaryWidget) {
-                this.summaryWidget = new AutomationSummaryWidget();
+                if (window.globalSummaryWidget) {
+                    this.summaryWidget = window.globalSummaryWidget;
+                } else {
+                    this.summaryWidget = new AutomationSummaryWidget();
+                }
             }
 
             // Check if we're on a scene page
@@ -3539,10 +4451,24 @@
             this.panel.appendChild(buttons);
 
             document.body.appendChild(this.panel);
+            
+            // Apply animation if available
+            if (window.animationController && window.animationController.animate) {
+                window.animationController.animate(this.panel, 'fadeInUp', {
+                    duration: 300,
+                    easing: 'ease-out'
+                });
+            }
+            
             this.isMinimized = false;
 
             // Initialize status tracking after panel is created
             this.initializeStatusTracking();
+            
+            // Create performance widget if libraries are available
+            if (window.performanceMonitor && window.cacheManager) {
+                this.createPerformanceWidget();
+            }
 
         }
 
@@ -3896,7 +4822,29 @@
                 this.showHealthDashboard();
             });
 
+            // Add Enhanced Settings button for performance libraries
+            const enhancedBtn = document.createElement('button');
+            enhancedBtn.textContent = '🚀 Enhanced';
+            enhancedBtn.style.cssText = `
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                padding: 10px 16px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 12px;
+                font-weight: 600;
+                transition: all 0.2s ease;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            `;
+            enhancedBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.showEnhancedSettings();
+            });
+
             buttons.appendChild(configBtn);
+            buttons.appendChild(enhancedBtn);
             buttons.appendChild(healthBtn);
             return buttons;
         }
@@ -5842,12 +6790,34 @@
 
                 // Show status instead of minimizing after automation completes
                 setTimeout(async () => {
-                    // Clear GraphQL cache to ensure fresh data
+                    // Clear all caches to ensure fresh data
                     if (this.sourceDetector && this.sourceDetector.cache) {
                         this.sourceDetector.cache.clear();
                     }
-
+                    
+                    // Clear GraphQL cache
+                    if (window.graphQLCache && window.graphQLCache.invalidate) {
+                        window.graphQLCache.invalidate('GetScene');
+                    } else if (window.cacheManager) {
+                        // Fallback: clear entire graphql cache store
+                        window.cacheManager.clear('graphql');
+                    }
+                    
+                    // Force refresh of status detection
+                    await this.statusTracker.detectCurrentStatus();
                     await this.updateStatusFromDOM();
+                    
+                    // Update and show summary widget 
+                    if (this.summaryWidget) {
+                        if (this.summaryWidget.updateFromAutomation) {
+                            this.summaryWidget.updateFromAutomation();
+                        }
+                        // Show the summary
+                        if (this.summaryWidget.showSummary) {
+                            this.summaryWidget.showSummary();
+                        }
+                    }
+                    
                     notifications.show('✅ Automation complete!', 'success');
                 }, 4000);
 
@@ -6156,6 +7126,9 @@
 
         async scrapeStashDB() {
             this.updateSceneStatus('🔍 Scraping...');
+            
+            // Track performance
+            const startTime = performance.now();
 
             if (this.automationCancelled) throw new Error('Automation cancelled');
             if (this.skipCurrentSourceRequested) return { found: false, skip: true, reason: 'user skipped' };
@@ -6199,10 +7172,36 @@
                 notifications.show(`StashDB scraper found no scene${reason}`, 'warning');
                 return { found: false, skip: true, reason: outcome.reason, notFound };
             }
+            // Track performance
+            if (window.performanceMonitor) {
+                const duration = performance.now() - startTime;
+                window.performanceMonitor.addMetric({
+                    type: 'scraping',
+                    name: 'StashDB',
+                    duration: duration,
+                    success: true,
+                    timestamp: Date.now()
+                });
+            }
+            
+            // Track ThePornDB completion
+            if (window.performanceMonitor) {
+                const duration = performance.now() - startTime;
+                window.performanceMonitor.addMetric({
+                    type: 'scraping',
+                    name: 'ThePornDB',
+                    duration: duration,
+                    success: true,
+                    timestamp: Date.now()
+                });
+            }
+            
             return { found: true };
         }
 
         async scrapeThePornDB() {
+            // Track performance
+            const startTime = performance.now();
             this.updateSceneStatus('🔍 Scraping...');
 
             if (this.automationCancelled) throw new Error('Automation cancelled');
@@ -7708,8 +8707,12 @@
     // Create UI manager
     const uiManager = new UIManager();
 
-    // Create global summary widget
+    // Create global summary widget and make it available
     const globalSummaryWidget = new AutomationSummaryWidget(uiManager, sourceDetector, statusTracker, historyManager);
+    window.globalSummaryWidget = globalSummaryWidget;
+    
+    // Assign to uiManager
+    uiManager.summaryWidget = globalSummaryWidget;
 
     // Make available globally
     window.stashUIManager = uiManager;
@@ -7754,11 +8757,20 @@
         // Check if cache manager is available (already initialized by library)
         if (window.cacheManager) {
             debugLog('✅ Cache manager available');
+            // Pre-warm cache with common queries
+            if (window.graphQLCache && window.graphQLCache.warmup) {
+                window.graphQLCache.warmup();
+            }
         }
 
         // Check if performance monitor is available (already initialized by library)
         if (window.performanceMonitor) {
             debugLog('✅ Performance monitoring available');
+            // Configure performance thresholds
+            if (window.performanceConfigManager) {
+                window.performanceConfigManager.set('monitoring.warnThreshold', 100);
+                window.performanceConfigManager.set('monitoring.criticalThreshold', 500);
+            }
         }
 
         // Check if theme manager is available (already initialized by library)
@@ -7768,15 +8780,38 @@
                 window.themeManager.initialize();
             }
             debugLog('✅ Theme manager available');
+            // Apply dark theme by default for Stash
+            if (window.themeManager.applyTheme) {
+                window.themeManager.applyTheme('dark');
+            }
         }
 
         // Check if keyboard shortcuts are available (already initialized by library)
         if (window.keyboardShortcuts) {
-            // Keyboard shortcuts might need initialization
-            if (window.keyboardShortcuts.initialize) {
-                window.keyboardShortcuts.initialize();
+            // Register automation shortcuts
+            if (window.keyboardShortcuts.register) {
+                // Ctrl+Shift+A to start automation
+                window.keyboardShortcuts.register('ctrl+shift+a', () => {
+                    if (window.stashUIManager && window.stashUIManager.startAutomation) {
+                        window.stashUIManager.startAutomation();
+                    }
+                }, 'Start automation');
+                
+                // Ctrl+Shift+S to open settings
+                window.keyboardShortcuts.register('ctrl+shift+s', () => {
+                    if (window.stashUIManager && window.stashUIManager.openSettings) {
+                        window.stashUIManager.openSettings();
+                    }
+                }, 'Open settings');
+                
+                // Escape to cancel automation
+                window.keyboardShortcuts.register('escape', () => {
+                    if (window.stashUIManager && window.stashUIManager.automationInProgress) {
+                        window.stashUIManager.cancelAutomation();
+                    }
+                }, 'Cancel automation');
             }
-            debugLog('✅ Keyboard shortcuts available');
+            debugLog('✅ Keyboard shortcuts registered');
         }
 
         // Check if animation controller is available (already initialized by library)
