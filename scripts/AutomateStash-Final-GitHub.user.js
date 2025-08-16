@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AutomateStash Final Enhanced
 // @namespace    https://github.com/Stonelukas/stash-userscripts
-// @version      5.5.0
+// @version      5.6.0
 // @description  AutomateStash - with performance enhancements and post-automation summary widget
 // @author       AutomateStash Team
 // @match        http://localhost:9998/*
@@ -126,17 +126,8 @@
         [CONFIG.PREVENT_BACKGROUND_THROTTLING]: true,
         // Multi-scene open-in-tabs
         [CONFIG.NEW_TAB_CONCURRENCY]: 4,
-        // Keyboard shortcuts
+        // Keyboard shortcuts (now managed by keyboard-shortcuts.js library)
         [CONFIG.ENABLE_KEYBOARD_SHORTCUTS]: true,
-        [CONFIG.SHORTCUT_MAP]: {
-            apply: 'Alt+a',
-            save: 'Alt+s',
-            organize: 'Alt+o',
-            toggle: 'Alt+m',
-            help: 'Alt+h',
-            startRunConfirm: 'Alt+r',
-            startRunAuto: 'Alt+Shift+r'
-        },
 
     };
 
@@ -2923,6 +2914,28 @@
             } catch (_) { }
 
         }
+        saveAllEnhancedSettings() {
+            // Save keyboard shortcuts
+            const shortcuts = window.keyboardShortcuts ? window.keyboardShortcuts.exportConfig() : {};
+            GM_setValue('keyboard_shortcuts', JSON.stringify(shortcuts));
+            
+            // Save performance configuration
+            if (window.performanceConfigManager) {
+                const perfConfig = window.performanceConfigManager.export();
+                GM_setValue('performance_config', perfConfig);
+            }
+            
+            // Save theme settings
+            if (window.themeManager) {
+                GM_setValue('ui_theme', window.themeManager.currentTheme);
+            }
+            
+            // Save animation settings (already saved individually in the UI)
+            // Animation settings are saved when the Save button is clicked
+            
+            console.log('✅ All enhanced settings saved');
+        }
+        
         showEnhancedSettings() {
             // Close any existing dialog
             const existing = document.getElementById('enhanced-settings-dialog');
@@ -3065,9 +3078,16 @@
                 font-size: 18px;
                 transition: all 0.2s;
             `;
-            closeBtn.addEventListener('click', () => dialog.remove());
+            closeBtn.addEventListener('click', () => {
+                // Save all settings before closing
+                this.saveAllEnhancedSettings();
+                dialog.remove();
+            });
             dialog.appendChild(closeBtn);
 
+            // Register widget for z-index management
+            this.registerWidget(dialog);
+            
             // Add animation if available
             document.body.appendChild(dialog);
             if (window.animationController && window.animationController.animate) {
@@ -3568,16 +3588,250 @@
             
             // Add button event listener
             addBtn.addEventListener('click', () => {
-                const newShortcut = {
-                    key: 'Ctrl+Shift+?',
-                    originalKey: 'Ctrl+Shift+?',
-                    action: 'customAction',
-                    description: 'Custom Action',
-                    context: 'global'
-                };
-                shortcuts.push(newShortcut);
-                renderShortcuts();
-                notifications.show('New shortcut added - edit to customize', 'info');
+                // Show dialog to select action
+                const actionDialog = document.createElement('div');
+                actionDialog.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: #2c3e50;
+                    border: 1px solid rgba(255,255,255,0.2);
+                    border-radius: 8px;
+                    padding: 20px;
+                    z-index: 100001;
+                    min-width: 400px;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                `;
+                
+                // Get already assigned actions
+                const assignedActions = new Set(shortcuts.map(s => s.action));
+                
+                // Available actions - comprehensive list
+                const allActions = [
+                    // Automation Actions
+                    { action: 'startAutomation', description: 'Start automation', category: 'Automation' },
+                    { action: 'startAutomationSilent', description: 'Start silent automation', category: 'Automation' },
+                    { action: 'cancelAutomation', description: 'Cancel automation', category: 'Automation' },
+                    { action: 'pauseAutomation', description: 'Pause automation', category: 'Automation' },
+                    { action: 'resumeAutomation', description: 'Resume automation', category: 'Automation' },
+                    { action: 'skipCurrentSource', description: 'Skip current scraper source', category: 'Automation' },
+                    
+                    // UI Actions
+                    { action: 'toggleMinimize', description: 'Toggle minimize panel', category: 'UI' },
+                    { action: 'openConfig', description: 'Open configuration', category: 'UI' },
+                    { action: 'openEnhancedSettings', description: 'Open enhanced settings', category: 'UI' },
+                    { action: 'showHelp', description: 'Show help', category: 'UI' },
+                    { action: 'toggleTheme', description: 'Toggle theme', category: 'UI' },
+                    { action: 'togglePerformanceMonitor', description: 'Toggle performance monitor', category: 'UI' },
+                    { action: 'toggleSummaryWidget', description: 'Toggle summary widget', category: 'UI' },
+                    { action: 'toggleDebugMode', description: 'Toggle debug mode', category: 'UI' },
+                    { action: 'toggleNotifications', description: 'Toggle notifications', category: 'UI' },
+                    { action: 'clearNotifications', description: 'Clear all notifications', category: 'UI' },
+                    { action: 'refreshUI', description: 'Refresh UI elements', category: 'UI' },
+                    
+                    // Scene Actions
+                    { action: 'applyScrapedData', description: 'Apply scraped data', category: 'Scene' },
+                    { action: 'saveScene', description: 'Save scene', category: 'Scene' },
+                    { action: 'organizeScene', description: 'Mark as organized', category: 'Scene' },
+                    { action: 'deleteScene', description: 'Delete current scene', category: 'Scene' },
+                    { action: 'duplicateScene', description: 'Duplicate scene', category: 'Scene' },
+                    { action: 'generatePreview', description: 'Generate preview', category: 'Scene' },
+                    { action: 'playScene', description: 'Play scene', category: 'Scene' },
+                    { action: 'editScene', description: 'Edit scene details', category: 'Scene' },
+                    
+                    // Scraping Actions
+                    { action: 'scrapeStashDB', description: 'Scrape StashDB', category: 'Scraping' },
+                    { action: 'scrapeThePornDB', description: 'Scrape ThePornDB', category: 'Scraping' },
+                    { action: 'scrapeAll', description: 'Scrape all sources', category: 'Scraping' },
+                    { action: 'rescrapeScene', description: 'Re-scrape current scene', category: 'Scraping' },
+                    { action: 'forceRescrape', description: 'Force re-scrape (ignore cache)', category: 'Scraping' },
+                    { action: 'createPerformers', description: 'Create new performers', category: 'Scraping' },
+                    { action: 'createStudios', description: 'Create new studios', category: 'Scraping' },
+                    { action: 'createTags', description: 'Create new tags', category: 'Scraping' },
+                    
+                    // Navigation Actions
+                    { action: 'previousScene', description: 'Previous scene', category: 'Navigation' },
+                    { action: 'nextScene', description: 'Next scene', category: 'Navigation' },
+                    { action: 'firstScene', description: 'First scene', category: 'Navigation' },
+                    { action: 'lastScene', description: 'Last scene', category: 'Navigation' },
+                    { action: 'openEditPanel', description: 'Open edit panel', category: 'Navigation' },
+                    { action: 'closeEditPanel', description: 'Close edit panel', category: 'Navigation' },
+                    { action: 'goToScenes', description: 'Go to scenes page', category: 'Navigation' },
+                    { action: 'goToPerformers', description: 'Go to performers page', category: 'Navigation' },
+                    { action: 'goToStudios', description: 'Go to studios page', category: 'Navigation' },
+                    { action: 'goToTags', description: 'Go to tags page', category: 'Navigation' },
+                    { action: 'goToSettings', description: 'Go to settings page', category: 'Navigation' },
+                    
+                    // Performance Actions
+                    { action: 'clearCache', description: 'Clear all caches', category: 'Performance' },
+                    { action: 'clearGraphQLCache', description: 'Clear GraphQL cache', category: 'Performance' },
+                    { action: 'clearDOMCache', description: 'Clear DOM cache', category: 'Performance' },
+                    { action: 'runPerformanceTest', description: 'Run performance test', category: 'Performance' },
+                    { action: 'exportPerformanceData', description: 'Export performance data', category: 'Performance' },
+                    { action: 'optimizePerformance', description: 'Auto-optimize performance', category: 'Performance' },
+                    { action: 'toggleCaching', description: 'Toggle caching on/off', category: 'Performance' },
+                    
+                    // Data Actions
+                    { action: 'exportData', description: 'Export current data', category: 'Data' },
+                    { action: 'importData', description: 'Import data', category: 'Data' },
+                    { action: 'backupSettings', description: 'Backup all settings', category: 'Data' },
+                    { action: 'restoreSettings', description: 'Restore settings', category: 'Data' },
+                    { action: 'resetSettings', description: 'Reset to defaults', category: 'Data' },
+                    { action: 'exportShortcuts', description: 'Export shortcuts', category: 'Data' },
+                    { action: 'importShortcuts', description: 'Import shortcuts', category: 'Data' },
+                    
+                    // Batch Actions
+                    { action: 'selectAll', description: 'Select all scenes', category: 'Batch' },
+                    { action: 'deselectAll', description: 'Deselect all scenes', category: 'Batch' },
+                    { action: 'invertSelection', description: 'Invert selection', category: 'Batch' },
+                    { action: 'bulkOrganize', description: 'Organize selected scenes', category: 'Batch' },
+                    { action: 'bulkScrape', description: 'Scrape selected scenes', category: 'Batch' },
+                    { action: 'bulkTag', description: 'Tag selected scenes', category: 'Batch' },
+                    { action: 'bulkDelete', description: 'Delete selected scenes', category: 'Batch' },
+                    
+                    // Custom Actions
+                    { action: 'customAction1', description: 'Custom Action 1', category: 'Custom' },
+                    { action: 'customAction2', description: 'Custom Action 2', category: 'Custom' },
+                    { action: 'customAction3', description: 'Custom Action 3', category: 'Custom' },
+                    { action: 'runMacro', description: 'Run saved macro', category: 'Custom' },
+                    { action: 'recordMacro', description: 'Record macro', category: 'Custom' },
+                    { action: 'stopMacro', description: 'Stop macro recording', category: 'Custom' }
+                ];
+                
+                // Filter out already assigned actions
+                const availableActions = allActions.filter(action => !assignedActions.has(action.action));
+                
+                // Check if there are any available actions
+                if (availableActions.length === 0) {
+                    notifications.show('All actions already have shortcuts assigned!', 'warning');
+                    return;
+                }
+                
+                // Group actions by category
+                const groupedActions = {};
+                availableActions.forEach(action => {
+                    if (!groupedActions[action.category]) {
+                        groupedActions[action.category] = [];
+                    }
+                    groupedActions[action.category].push(action);
+                });
+                
+                // Create options HTML with optgroups
+                let optionsHTML = '';
+                Object.keys(groupedActions).sort().forEach(category => {
+                    optionsHTML += `<optgroup label="${category}">`;
+                    groupedActions[category].forEach(action => {
+                        optionsHTML += `<option value="${action.action}">${action.description}</option>`;
+                    });
+                    optionsHTML += '</optgroup>';
+                });
+                
+                actionDialog.innerHTML = `
+                    <h4 style="color: #ecf0f1; margin-bottom: 15px;">Add New Keyboard Shortcut</h4>
+                    <div style="margin-bottom: 15px;">
+                        <label style="color: #ecf0f1; display: block; margin-bottom: 5px;">Key Combination:</label>
+                        <input type="text" id="new-shortcut-key" value="Ctrl+Shift+?" 
+                               placeholder="e.g., Ctrl+Alt+X, Shift+F1, Alt+5"
+                               style="width: 100%; padding: 8px; background: #34495e; color: white; border: 1px solid #556d7f; border-radius: 4px;">
+                        <small style="color: #95a5a6; display: block; margin-top: 5px;">
+                            Use Ctrl, Alt, Shift, Meta as modifiers. Examples: Ctrl+S, Alt+Shift+R, F5
+                        </small>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="color: #ecf0f1; display: block; margin-bottom: 5px;">Action:</label>
+                        <select id="new-shortcut-action" style="width: 100%; padding: 8px; background: #34495e; color: white; border: 1px solid #556d7f; border-radius: 4px; max-height: 200px;">
+                            ${optionsHTML}
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="color: #ecf0f1; display: block; margin-bottom: 5px;">Context:</label>
+                        <select id="new-shortcut-context" style="width: 100%; padding: 8px; background: #34495e; color: white; border: 1px solid #556d7f; border-radius: 4px;">
+                            <option value="global">Global (Works everywhere)</option>
+                            <option value="edit">Edit Panel (Only in edit mode)</option>
+                            <option value="automation">During Automation</option>
+                            <option value="modal">Modal Dialog</option>
+                            <option value="scenes">Scenes Page</option>
+                            <option value="performers">Performers Page</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="color: #ecf0f1; display: block; margin-bottom: 5px;">Custom Description (Optional):</label>
+                        <input type="text" id="new-shortcut-description" 
+                               placeholder="Leave empty to use default description"
+                               style="width: 100%; padding: 8px; background: #34495e; color: white; border: 1px solid #556d7f; border-radius: 4px;">
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button id="cancel-new-shortcut" style="background: #7f8c8d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                            Cancel
+                        </button>
+                        <button id="confirm-new-shortcut" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                            Add Shortcut
+                        </button>
+                    </div>
+                `;
+                
+                document.body.appendChild(actionDialog);
+                
+                // Focus on key input
+                actionDialog.querySelector('#new-shortcut-key').focus();
+                
+                // Event listeners for dialog buttons
+                actionDialog.querySelector('#cancel-new-shortcut').addEventListener('click', () => {
+                    actionDialog.remove();
+                });
+                
+                actionDialog.querySelector('#confirm-new-shortcut').addEventListener('click', () => {
+                    const keyInput = actionDialog.querySelector('#new-shortcut-key');
+                    const actionSelect = actionDialog.querySelector('#new-shortcut-action');
+                    const contextSelect = actionDialog.querySelector('#new-shortcut-context');
+                    const descriptionInput = actionDialog.querySelector('#new-shortcut-description');
+                    
+                    const selectedAction = availableActions.find(a => a.action === actionSelect.value);
+                    const newShortcut = {
+                        key: keyInput.value.trim(),
+                        originalKey: keyInput.value.trim(),
+                        action: actionSelect.value,
+                        description: descriptionInput.value.trim() || (selectedAction ? selectedAction.description : 'Custom Action'),
+                        context: contextSelect.value
+                    };
+                    
+                    // Validate key combination
+                    if (!newShortcut.key || newShortcut.key === '') {
+                        notifications.show('Please enter a valid key combination', 'error');
+                        return;
+                    }
+                    
+                    // Check for duplicate shortcuts
+                    const duplicate = shortcuts.find(s => s.key === newShortcut.key && s.context === newShortcut.context);
+                    if (duplicate) {
+                        notifications.show(`Shortcut ${newShortcut.key} already exists in ${newShortcut.context} context`, 'error');
+                        return;
+                    }
+                    
+                    // Register the new shortcut
+                    if (window.keyboardShortcuts && window.keyboardShortcuts.registerShortcut) {
+                        window.keyboardShortcuts.registerShortcut(
+                            newShortcut.key,
+                            newShortcut.action,
+                            newShortcut.description,
+                            newShortcut.context
+                        );
+                    }
+                    
+                    shortcuts.push(newShortcut);
+                    renderShortcuts();
+                    actionDialog.remove();
+                    notifications.show(`New shortcut added: ${newShortcut.key} → ${newShortcut.description}`, 'success');
+                });
+                
+                // Add Enter key support for quick add
+                actionDialog.querySelector('#new-shortcut-key').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        actionDialog.querySelector('#confirm-new-shortcut').click();
+                    }
+                });
             });
             
             // Reset button event listener
@@ -3690,7 +3944,11 @@
                 'spring', 'bounce', 'easeInQuad', 'easeOutQuad', 'easeInOutQuad'
             ];
             
-            // Widget animation configurations
+            // Load saved animation settings
+            const savedAnimSettings = GM_getValue('widget_animations', null);
+            const animSettings = savedAnimSettings ? JSON.parse(savedAnimSettings) : {};
+            
+            // Widget animation configurations with saved or default values
             const widgetConfigs = [
                 { id: 'main-panel', name: 'Main Panel', defaultAnim: 'fadeIn', defaultDuration: 300 },
                 { id: 'enhanced-settings', name: 'Enhanced Settings', defaultAnim: 'scaleIn', defaultDuration: 400 },
@@ -3698,7 +3956,12 @@
                 { id: 'summary-widget', name: 'Summary Widget', defaultAnim: 'slideInLeft', defaultDuration: 350 },
                 { id: 'notifications', name: 'Notifications', defaultAnim: 'slideInUp', defaultDuration: 250 },
                 { id: 'minimized-button', name: 'Minimized Button', defaultAnim: 'bounce', defaultDuration: 500 }
-            ];
+            ].map(config => ({
+                ...config,
+                defaultAnim: animSettings[config.id]?.animation || config.defaultAnim,
+                defaultDuration: animSettings[config.id]?.duration || config.defaultDuration,
+                defaultEasing: animSettings[config.id]?.easing || 'ease'
+            }));
             
             widgetConfigs.forEach(widget => {
                 const widgetRow = document.createElement('div');
@@ -3718,7 +3981,7 @@
                                placeholder="Duration (ms)">
                         <select class="easing-select" data-widget="${widget.id}" style="background: #34495e; color: white; border: 1px solid #556d7f; padding: 5px; border-radius: 4px;">
                             ${easingOptions.map(easing => 
-                                `<option value="${easing}">${easing}</option>`
+                                `<option value="${easing}" ${easing === widget.defaultEasing ? 'selected' : ''}>${easing}</option>`
                             ).join('')}
                         </select>
                         <button class="preview-btn" data-widget="${widget.id}" style="background: #667eea; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
@@ -3830,17 +4093,233 @@
 
         createConfigTab() {
             const container = document.createElement('div');
+            container.style.cssText = 'max-height: 500px; overflow-y: auto;';
             
             const title = document.createElement('h3');
-            title.textContent = 'Performance Configuration';
+            title.textContent = 'Advanced Configuration';
             title.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
             container.appendChild(title);
 
+            // Configuration sections
+            const sections = [
+                {
+                    title: '⚡ Performance Monitoring',
+                    settings: [
+                        { path: 'monitoring.enabled', label: 'Enable Monitoring', type: 'checkbox' },
+                        { path: 'monitoring.sampleRate', label: 'Sample Rate', type: 'slider', min: 0, max: 1, step: 0.1 },
+                        { path: 'monitoring.reportingInterval', label: 'Reporting Interval (ms)', type: 'number', min: 1000, max: 60000 },
+                        { path: 'monitoring.longTaskThreshold', label: 'Long Task Threshold (ms)', type: 'number', min: 10, max: 200 },
+                        { path: 'monitoring.warnThreshold', label: 'Warning Threshold (ms)', type: 'number', min: 50, max: 500 },
+                        { path: 'monitoring.criticalThreshold', label: 'Critical Threshold (ms)', type: 'number', min: 100, max: 1000 }
+                    ]
+                },
+                {
+                    title: '💾 Cache Configuration',
+                    settings: [
+                        { path: 'cache.enabled', label: 'Enable Caching', type: 'checkbox' },
+                        { path: 'cache.graphql.maxSize', label: 'GraphQL Cache Size', type: 'number', min: 50, max: 500 },
+                        { path: 'cache.graphql.ttl', label: 'GraphQL TTL (ms)', type: 'number', min: 60000, max: 3600000 },
+                        { path: 'cache.dom.maxSize', label: 'DOM Cache Size', type: 'number', min: 10, max: 100 },
+                        { path: 'cache.dom.ttl', label: 'DOM TTL (ms)', type: 'number', min: 5000, max: 60000 },
+                        { path: 'cache.warmupEnabled', label: 'Enable Cache Warmup', type: 'checkbox' },
+                        { path: 'cache.cleanupInterval', label: 'Cleanup Interval (ms)', type: 'number', min: 60000, max: 600000 }
+                    ]
+                },
+                {
+                    title: '🎯 DOM Operations',
+                    settings: [
+                        { path: 'dom.batchingEnabled', label: 'Enable DOM Batching', type: 'checkbox' },
+                        { path: 'dom.batchFlushDelay', label: 'Batch Flush Delay (ms)', type: 'number', min: 0, max: 100 },
+                        { path: 'dom.mutationObserverDelay', label: 'Mutation Observer Delay (ms)', type: 'number', min: 100, max: 2000 },
+                        { path: 'dom.scrollThrottle', label: 'Scroll Throttle (ms)', type: 'number', min: 16, max: 500 },
+                        { path: 'dom.resizeThrottle', label: 'Resize Throttle (ms)', type: 'number', min: 50, max: 1000 },
+                        { path: 'dom.lazyLoadOffset', label: 'Lazy Load Offset (px)', type: 'number', min: 0, max: 500 }
+                    ]
+                },
+                {
+                    title: '📊 Task Queue',
+                    settings: [
+                        { path: 'taskQueue.enabled', label: 'Enable Task Queue', type: 'checkbox' },
+                        { path: 'taskQueue.defaultConcurrency', label: 'Default Concurrency', type: 'number', min: 1, max: 10 },
+                        { path: 'taskQueue.maxConcurrency', label: 'Max Concurrency', type: 'number', min: 1, max: 20 },
+                        { path: 'taskQueue.defaultTimeout', label: 'Default Timeout (ms)', type: 'number', min: 5000, max: 60000 },
+                        { path: 'taskQueue.retryEnabled', label: 'Enable Retries', type: 'checkbox' },
+                        { path: 'taskQueue.maxRetries', label: 'Max Retries', type: 'number', min: 0, max: 10 },
+                        { path: 'taskQueue.retryDelay', label: 'Retry Delay (ms)', type: 'number', min: 100, max: 5000 }
+                    ]
+                },
+                {
+                    title: '🧠 Memory Management',
+                    settings: [
+                        { path: 'memory.monitoringEnabled', label: 'Enable Memory Monitoring', type: 'checkbox' },
+                        { path: 'memory.checkInterval', label: 'Check Interval (ms)', type: 'number', min: 10000, max: 120000 },
+                        { path: 'memory.warningThreshold', label: 'Warning Threshold (bytes)', type: 'number', min: 10485760, max: 209715200 },
+                        { path: 'memory.criticalThreshold', label: 'Critical Threshold (bytes)', type: 'number', min: 52428800, max: 524288000 },
+                        { path: 'memory.autoCleanup', label: 'Auto Cleanup', type: 'checkbox' },
+                        { path: 'memory.gcSuggestion', label: 'GC Suggestions', type: 'checkbox' }
+                    ]
+                },
+                {
+                    title: '🌐 Network Optimization',
+                    settings: [
+                        { path: 'network.requestDeduplication', label: 'Request Deduplication', type: 'checkbox' },
+                        { path: 'network.requestBatching', label: 'Request Batching', type: 'checkbox' },
+                        { path: 'network.batchWindowSize', label: 'Batch Window (ms)', type: 'number', min: 10, max: 200 },
+                        { path: 'network.maxBatchSize', label: 'Max Batch Size', type: 'number', min: 1, max: 50 },
+                        { path: 'network.cacheFirstStrategy', label: 'Cache First Strategy', type: 'checkbox' },
+                        { path: 'network.maxConcurrentRequests', label: 'Max Concurrent Requests', type: 'number', min: 1, max: 20 }
+                    ]
+                },
+                {
+                    title: '🔍 Debug Options',
+                    settings: [
+                        { path: 'debug.enabled', label: 'Enable Debug Mode', type: 'checkbox' },
+                        { path: 'debug.verboseLogging', label: 'Verbose Logging', type: 'checkbox' },
+                        { path: 'debug.performanceMarks', label: 'Performance Marks', type: 'checkbox' },
+                        { path: 'debug.cacheLogging', label: 'Cache Logging', type: 'checkbox' },
+                        { path: 'debug.networkLogging', label: 'Network Logging', type: 'checkbox' },
+                        { path: 'debug.domLogging', label: 'DOM Logging', type: 'checkbox' },
+                        { path: 'debug.showMetricsOverlay', label: 'Show Metrics Overlay', type: 'checkbox' }
+                    ]
+                }
+            ];
+
+            // Create sections
+            sections.forEach(section => {
+                const sectionDiv = document.createElement('div');
+                sectionDiv.style.cssText = 'margin-bottom: 25px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px;';
+                
+                const sectionTitle = document.createElement('h4');
+                sectionTitle.textContent = section.title;
+                sectionTitle.style.cssText = 'color: #ecf0f1; margin-bottom: 15px; font-size: 14px;';
+                sectionDiv.appendChild(sectionTitle);
+                
+                section.settings.forEach(setting => {
+                    const settingDiv = document.createElement('div');
+                    settingDiv.style.cssText = 'margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;';
+                    
+                    const label = document.createElement('label');
+                    label.textContent = setting.label;
+                    label.style.cssText = 'color: #bdc3c7; font-size: 12px; flex: 1;';
+                    
+                    let input;
+                    const currentValue = window.performanceConfigManager?.get(setting.path);
+                    
+                    if (setting.type === 'checkbox') {
+                        input = document.createElement('input');
+                        input.type = 'checkbox';
+                        input.checked = currentValue || false;
+                        input.style.cssText = 'cursor: pointer;';
+                        
+                        input.addEventListener('change', (e) => {
+                            if (window.performanceConfigManager) {
+                                window.performanceConfigManager.set(setting.path, e.target.checked);
+                                notifications.show(`${setting.label}: ${e.target.checked ? 'Enabled' : 'Disabled'}`, 'success');
+                            }
+                        });
+                    } else if (setting.type === 'slider') {
+                        const sliderContainer = document.createElement('div');
+                        sliderContainer.style.cssText = 'display: flex; align-items: center; gap: 10px;';
+                        
+                        input = document.createElement('input');
+                        input.type = 'range';
+                        input.min = setting.min;
+                        input.max = setting.max;
+                        input.step = setting.step;
+                        input.value = currentValue || setting.min;
+                        input.style.cssText = 'width: 100px;';
+                        
+                        const valueDisplay = document.createElement('span');
+                        valueDisplay.textContent = input.value;
+                        valueDisplay.style.cssText = 'color: #ecf0f1; min-width: 40px; text-align: right;';
+                        
+                        input.addEventListener('input', (e) => {
+                            valueDisplay.textContent = e.target.value;
+                            if (window.performanceConfigManager) {
+                                window.performanceConfigManager.set(setting.path, parseFloat(e.target.value));
+                            }
+                        });
+                        
+                        sliderContainer.appendChild(input);
+                        sliderContainer.appendChild(valueDisplay);
+                        input = sliderContainer;
+                    } else if (setting.type === 'number') {
+                        input = document.createElement('input');
+                        input.type = 'number';
+                        input.min = setting.min;
+                        input.max = setting.max;
+                        input.value = currentValue || setting.min;
+                        input.style.cssText = 'width: 80px; padding: 4px; background: #34495e; color: white; border: 1px solid #556d7f; border-radius: 4px;';
+                        
+                        input.addEventListener('change', (e) => {
+                            const value = parseInt(e.target.value);
+                            if (window.performanceConfigManager && !isNaN(value)) {
+                                window.performanceConfigManager.set(setting.path, value);
+                                notifications.show(`${setting.label} set to ${value}`, 'success');
+                            }
+                        });
+                    }
+                    
+                    settingDiv.appendChild(label);
+                    settingDiv.appendChild(input);
+                    sectionDiv.appendChild(settingDiv);
+                });
+                
+                container.appendChild(sectionDiv);
+            });
+
+            // Add performance profiles section
+            const profilesDiv = document.createElement('div');
+            profilesDiv.style.cssText = 'margin-bottom: 25px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px;';
+            
+            const profilesTitle = document.createElement('h4');
+            profilesTitle.textContent = '🎯 Performance Profiles';
+            profilesTitle.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
+            profilesDiv.appendChild(profilesTitle);
+            
+            const profiles = [
+                { name: 'balanced', label: 'Balanced', description: 'Good mix of performance and features' },
+                { name: 'performance', label: 'High Performance', description: 'Maximum performance, all optimizations' },
+                { name: 'lowResource', label: 'Low Resource', description: 'Minimal resource usage' },
+                { name: 'debug', label: 'Debug Mode', description: 'Enable all logging and debugging' }
+            ];
+            
+            profiles.forEach(profile => {
+                const profileBtn = document.createElement('button');
+                profileBtn.style.cssText = `
+                    display: block;
+                    width: 100%;
+                    margin-bottom: 8px;
+                    padding: 10px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    text-align: left;
+                `;
+                profileBtn.innerHTML = `
+                    <div style="font-weight: bold;">${profile.label}</div>
+                    <div style="font-size: 11px; opacity: 0.9; margin-top: 4px;">${profile.description}</div>
+                `;
+                
+                profileBtn.addEventListener('click', () => {
+                    if (window.performanceConfigManager) {
+                        window.performanceConfigManager.applyProfile(profile.name);
+                        notifications.show(`Applied ${profile.label} profile`, 'success');
+                    }
+                });
+                
+                profilesDiv.appendChild(profileBtn);
+            });
+            
+            container.appendChild(profilesDiv);
+
             // Export/Import config
             const backupDiv = document.createElement('div');
-            backupDiv.style.cssText = 'margin-bottom: 20px;';
+            backupDiv.style.cssText = 'margin-bottom: 20px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px;';
             backupDiv.innerHTML = `
-                <h4 style="color: #ecf0f1; margin-bottom: 10px;">Configuration Backup</h4>
+                <h4 style="color: #ecf0f1; margin-bottom: 10px;">🔧 Configuration Backup</h4>
                 <div style="display: flex; gap: 10px;">
             `;
             
@@ -3853,6 +4332,7 @@
                 padding: 10px 20px;
                 border-radius: 6px;
                 cursor: pointer;
+                flex: 1;
             `;
             exportBtn.addEventListener('click', () => {
                 if (window.performanceConfigManager) {
@@ -3877,6 +4357,7 @@
                 padding: 10px 20px;
                 border-radius: 6px;
                 cursor: pointer;
+                flex: 1;
             `;
             importBtn.addEventListener('click', () => {
                 const input = document.createElement('input');
@@ -3896,8 +4377,36 @@
                 input.click();
             });
             
-            backupDiv.appendChild(exportBtn);
-            backupDiv.appendChild(importBtn);
+            const resetBtn = document.createElement('button');
+            resetBtn.textContent = 'Reset to Defaults';
+            resetBtn.style.cssText = `
+                background: #e74c3c;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+                flex: 1;
+            `;
+            resetBtn.addEventListener('click', () => {
+                if (confirm('Are you sure you want to reset all performance settings to defaults?')) {
+                    if (window.performanceConfigManager) {
+                        window.performanceConfigManager.reset();
+                        notifications.show('Configuration reset to defaults', 'success');
+                        // Refresh the tab to show new values
+                        const event = new Event('click');
+                        document.querySelector('[data-tab="config"]')?.dispatchEvent(event);
+                    }
+                }
+            });
+            
+            const buttonsDiv = document.createElement('div');
+            buttonsDiv.style.cssText = 'display: flex; gap: 10px;';
+            buttonsDiv.appendChild(exportBtn);
+            buttonsDiv.appendChild(importBtn);
+            buttonsDiv.appendChild(resetBtn);
+            
+            backupDiv.appendChild(buttonsDiv);
             container.appendChild(backupDiv);
 
             // Optimization suggestions
@@ -4128,6 +4637,9 @@
             this.updatePerformanceMetrics();
             setInterval(() => this.updatePerformanceMetrics(), 2000);
 
+            // Register widget for z-index management
+            this.registerWidget(widget);
+            
             // Apply entrance animation
             if (window.animationController) {
                 window.animationController.animate(widget, 'fadeIn', {
@@ -4545,32 +5057,352 @@
         }
 
         initializeShortcuts() {
-            // The keyboard library handles all shortcuts through action callbacks
-            // which are set up in the main initialization
-            // This method is kept for compatibility but the actual keyboard handling
-            // is done by the keyboard-shortcuts.js library
-            
             // Store reference to UIManager for library callbacks
             window.stashUIManager = this;
             
-            // Set up any additional action callbacks that weren't set in main init
-            if (window.keyboardShortcuts && window.keyboardShortcuts.setActionCallback) {
-                // Helper action for showing keyboard help
-                window.keyboardShortcuts.setActionCallback('showKeyboardHelp', () => {
-                    this.showShortcutHelp();
-                });
+            // Initialize the keyboard shortcuts library if not already initialized
+            if (window.KeyboardShortcutsManager && !window.keyboardShortcuts) {
+                // Load saved shortcuts or use defaults
+                const savedShortcuts = GM_getValue('keyboard_shortcuts', null);
+                const config = savedShortcuts ? { shortcuts: JSON.parse(savedShortcuts) } : {};
                 
-                // Action for confirming apply when dialog is open
-                window.keyboardShortcuts.setActionCallback('confirmApply', () => {
-                    const confirmApplyBtn = document.querySelector('#apply-scraped-data');
-                    if (confirmApplyBtn) {
-                        confirmApplyBtn.click();
-                    }
-                });
+                window.keyboardShortcuts = new window.KeyboardShortcutsManager(config);
+                console.log('🎹 Keyboard shortcuts library initialized');
             }
             
-            // Only set up a basic fallback for ESC if library is not available
-            if (!window.keyboardShortcuts) {
+            // Set up action callbacks for the keyboard library
+            if (window.keyboardShortcuts) {
+                // Register all action callbacks
+                window.keyboardShortcuts.onAction('startAutomation', () => {
+                    if (!this.automationInProgress) {
+                        this.startAutomation();
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('startAutomationSilent', () => {
+                    if (!this.automationInProgress) {
+                        this.startAutomation(true);
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('toggleMinimize', () => {
+                    if (this.isMinimized) {
+                        this.expand();
+                    } else {
+                        this.minimize();
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('cancelAutomation', () => {
+                    if (this.automationInProgress) {
+                        this.cancelAutomation();
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('openConfig', () => {
+                    this.openConfigDialog();
+                });
+                
+                window.keyboardShortcuts.onAction('showHelp', () => {
+                    if (window.keyboardShortcuts.showHelpDialog) {
+                        window.keyboardShortcuts.showHelpDialog();
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('applyScrapedData', () => {
+                    const applyBtn = document.querySelector('.btn-primary[title*="Apply"]');
+                    if (applyBtn) applyBtn.click();
+                });
+                
+                window.keyboardShortcuts.onAction('saveScene', () => {
+                    const saveBtn = document.querySelector('.btn-primary[title*="Save"]');
+                    if (saveBtn) saveBtn.click();
+                });
+                
+                window.keyboardShortcuts.onAction('organizeScene', () => {
+                    const organizeBtn = document.querySelector('button[title="Organized"]');
+                    if (organizeBtn) organizeBtn.click();
+                });
+                
+                window.keyboardShortcuts.onAction('scrapeStashDB', async () => {
+                    if (this.automator) {
+                        await this.automator.scrapeStashDB();
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('scrapeThePornDB', async () => {
+                    if (this.automator) {
+                        await this.automator.scrapeThePornDB();
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('toggleTheme', () => {
+                    if (window.themeManager) {
+                        const allThemes = window.themeManager.getAllThemes();
+                        const themeNames = Object.keys(allThemes).filter(name => name !== 'system');
+                        const currentIndex = themeNames.indexOf(window.themeManager.currentTheme);
+                        const nextIndex = (currentIndex + 1) % themeNames.length;
+                        const nextTheme = themeNames[nextIndex];
+                        window.themeManager.applyTheme(nextTheme);
+                        notifications.show(`Theme switched to ${allThemes[nextTheme].name}`, 'success');
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('togglePerformanceMonitor', () => {
+                    const perfWidget = document.getElementById('performance-widget');
+                    if (perfWidget) {
+                        perfWidget.style.display = perfWidget.style.display === 'none' ? 'block' : 'none';
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('toggleDebugMode', () => {
+                    const currentDebug = GM_getValue('debugMode', false);
+                    GM_setValue('debugMode', !currentDebug);
+                    notifications.show(`Debug mode ${!currentDebug ? 'enabled' : 'disabled'}`, 'success');
+                });
+                
+                // Additional UI Actions
+                window.keyboardShortcuts.onAction('openEnhancedSettings', () => {
+                    this.showEnhancedSettings();
+                });
+                
+                window.keyboardShortcuts.onAction('toggleSummaryWidget', () => {
+                    const widget = document.getElementById('automation-summary-widget');
+                    if (widget) {
+                        widget.style.display = widget.style.display === 'none' ? 'block' : 'none';
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('toggleNotifications', () => {
+                    const enabled = !GM_getValue('notifications_enabled', true);
+                    GM_setValue('notifications_enabled', enabled);
+                    notifications.show(`Notifications ${enabled ? 'enabled' : 'disabled'}`, 'success');
+                });
+                
+                window.keyboardShortcuts.onAction('clearNotifications', () => {
+                    const notifs = document.querySelectorAll('.stash-notification');
+                    notifs.forEach(n => n.remove());
+                    notifications.show('All notifications cleared', 'success');
+                });
+                
+                // Performance Actions
+                window.keyboardShortcuts.onAction('clearCache', () => {
+                    if (window.cacheManager) {
+                        window.cacheManager.clear();
+                        notifications.show('All caches cleared', 'success');
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('clearGraphQLCache', () => {
+                    if (window.cacheManager) {
+                        window.cacheManager.clear('graphql');
+                        notifications.show('GraphQL cache cleared', 'success');
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('clearDOMCache', () => {
+                    if (window.cacheManager) {
+                        window.cacheManager.clear('dom');
+                        notifications.show('DOM cache cleared', 'success');
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('exportPerformanceData', () => {
+                    if (window.performanceMonitor) {
+                        const data = window.performanceMonitor.exportMetrics();
+                        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `performance-data-${Date.now()}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        notifications.show('Performance data exported', 'success');
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('optimizePerformance', () => {
+                    if (window.performanceConfigManager) {
+                        window.performanceConfigManager.applyProfile('performance');
+                        notifications.show('Performance optimizations applied', 'success');
+                    }
+                });
+                
+                // Navigation Actions
+                window.keyboardShortcuts.onAction('previousScene', () => {
+                    const prevBtn = document.querySelector('a[title="Previous"]');
+                    if (prevBtn) prevBtn.click();
+                });
+                
+                window.keyboardShortcuts.onAction('nextScene', () => {
+                    const nextBtn = document.querySelector('a[title="Next"]');
+                    if (nextBtn) nextBtn.click();
+                });
+                
+                window.keyboardShortcuts.onAction('goToScenes', () => {
+                    window.location.href = '/scenes';
+                });
+                
+                window.keyboardShortcuts.onAction('goToPerformers', () => {
+                    window.location.href = '/performers';
+                });
+                
+                window.keyboardShortcuts.onAction('goToStudios', () => {
+                    window.location.href = '/studios';
+                });
+                
+                window.keyboardShortcuts.onAction('goToTags', () => {
+                    window.location.href = '/tags';
+                });
+                
+                window.keyboardShortcuts.onAction('goToSettings', () => {
+                    window.location.href = '/settings';
+                });
+                
+                // Data Actions
+                window.keyboardShortcuts.onAction('backupSettings', () => {
+                    const settings = {
+                        config: getAllConfig(),
+                        shortcuts: window.keyboardShortcuts ? window.keyboardShortcuts.exportConfig() : {},
+                        performance: window.performanceConfigManager ? window.performanceConfigManager.export() : {},
+                        theme: GM_getValue('ui_theme', 'dark'),
+                        animations: GM_getValue('widget_animations', '{}')
+                    };
+                    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `stash-settings-backup-${Date.now()}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    notifications.show('Settings backed up successfully', 'success');
+                });
+                
+                window.keyboardShortcuts.onAction('restoreSettings', () => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'application/json';
+                    input.addEventListener('change', async (e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                            try {
+                                const text = await file.text();
+                                const settings = JSON.parse(text);
+                                
+                                // Restore each setting type
+                                if (settings.config) {
+                                    Object.entries(settings.config).forEach(([key, value]) => {
+                                        setConfig(key, value);
+                                    });
+                                }
+                                if (settings.shortcuts && window.keyboardShortcuts) {
+                                    window.keyboardShortcuts.importConfig(settings.shortcuts);
+                                }
+                                if (settings.performance && window.performanceConfigManager) {
+                                    window.performanceConfigManager.import(settings.performance);
+                                }
+                                if (settings.theme) {
+                                    GM_setValue('ui_theme', settings.theme);
+                                    if (window.themeManager) {
+                                        window.themeManager.applyTheme(settings.theme);
+                                    }
+                                }
+                                if (settings.animations) {
+                                    GM_setValue('widget_animations', settings.animations);
+                                }
+                                
+                                notifications.show('Settings restored successfully! Refresh page to apply all changes.', 'success');
+                            } catch (error) {
+                                notifications.show('Failed to restore settings: ' + error.message, 'error');
+                            }
+                        }
+                    });
+                    input.click();
+                });
+                
+                window.keyboardShortcuts.onAction('resetSettings', () => {
+                    if (confirm('Are you sure you want to reset all settings to defaults?')) {
+                        // Reset all configs
+                        Object.keys(CONFIG).forEach(key => {
+                            GM_deleteValue(CONFIG[key]);
+                        });
+                        // Reset other settings
+                        GM_deleteValue('ui_theme');
+                        GM_deleteValue('widget_animations');
+                        GM_deleteValue('keyboard_shortcuts');
+                        GM_deleteValue('performance_config');
+                        
+                        notifications.show('Settings reset to defaults! Refresh page to apply.', 'success');
+                    }
+                });
+                
+                // Scraping Actions
+                window.keyboardShortcuts.onAction('scrapeAll', async () => {
+                    if (this.automator) {
+                        await this.automator.scrapeStashDB();
+                        await this.automator.scrapeThePornDB();
+                        notifications.show('Scraped all sources', 'success');
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('rescrapeScene', async () => {
+                    if (this.automator) {
+                        // Force re-scrape by clearing status
+                        this.statusTracker.clearStatus();
+                        await this.automator.scrapeStashDB();
+                        await this.automator.scrapeThePornDB();
+                        notifications.show('Re-scraped current scene', 'success');
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('createPerformers', async () => {
+                    if (this.automator) {
+                        await this.automator.createNewPerformers();
+                        notifications.show('Created new performers', 'success');
+                    }
+                });
+                
+                // Batch Actions
+                window.keyboardShortcuts.onAction('selectAll', () => {
+                    const checkboxes = document.querySelectorAll('.scene-card input[type="checkbox"]');
+                    checkboxes.forEach(cb => cb.checked = true);
+                    notifications.show('All scenes selected', 'success');
+                });
+                
+                window.keyboardShortcuts.onAction('deselectAll', () => {
+                    const checkboxes = document.querySelectorAll('.scene-card input[type="checkbox"]');
+                    checkboxes.forEach(cb => cb.checked = false);
+                    notifications.show('All scenes deselected', 'success');
+                });
+                
+                window.keyboardShortcuts.onAction('invertSelection', () => {
+                    const checkboxes = document.querySelectorAll('.scene-card input[type="checkbox"]');
+                    checkboxes.forEach(cb => cb.checked = !cb.checked);
+                    notifications.show('Selection inverted', 'success');
+                });
+                
+                // Automation control actions
+                window.keyboardShortcuts.onAction('pauseAutomation', () => {
+                    if (this.automationInProgress) {
+                        this.automationPaused = true;
+                        notifications.show('Automation paused', 'info');
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('resumeAutomation', () => {
+                    if (this.automationPaused) {
+                        this.automationPaused = false;
+                        notifications.show('Automation resumed', 'success');
+                    }
+                });
+                
+                window.keyboardShortcuts.onAction('skipCurrentSource', () => {
+                    if (this.automator) {
+                        this.automator.skipCurrentSourceRequested = true;
+                        notifications.show('Skipping current source', 'info');
+                    }
+                });
+            } else {
                 console.warn('Keyboard shortcuts library not available, using basic fallback');
                 window.addEventListener('keydown', (e) => {
                     if (!getConfig(CONFIG.ENABLE_KEYBOARD_SHORTCUTS)) return;
