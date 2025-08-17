@@ -138,7 +138,6 @@ stateDiagram-v2
 | Create Task List               | spec-tasks(support parallel)        | .claude/specs/{feature_name}/tasks.md                        |
 | Judge(optional)                | spec-judge(support parallel)        | no doc, only call when user need to judge the spec documents |
 | Impl Task(optional)            | spec-impl(support parallel)         | no doc, only use when user requests parallel execution (>=2) |
-| Test(optional)                 | spec-test(single call)              | no need to focus on, belongs to code resources               |
 
 ### Call method
 
@@ -208,13 +207,6 @@ Note:
 - spec_base_path: spec 文档基础路径
 - task_id: 要执行的任务 ID（如"2.1"）
 - language_preference: 语言偏好
-
-#### Test - spec-test
-
-- language_preference: 语言偏好
-- task_id: 任务 ID
-- feature_name: 功能名称
-- spec_base_path: spec 文档基础路径
 
 #### Tree-based Judge Evaluation Rules
 

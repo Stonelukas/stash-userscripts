@@ -1,0 +1,35 @@
+[
+  {
+    "session_id": "452c520d-809c-4431-bed4-93456befe6c1",
+    "transcript_path": "/home/stonelukas/.claude/projects/-home-stonelukas-tools-privat-stash-userscripts/452c520d-809c-4431-bed4-93456befe6c1.jsonl",
+    "cwd": "/home/stonelukas/tools/privat/stash-userscripts",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "mkdir -p .claude/specs/widget-system-enhancements",
+      "description": "Create spec directory for widget enhancements"
+    }
+  },
+  {
+    "session_id": "dfbd3bc4-14a9-4c19-92a2-42ea09cb002a",
+    "transcript_path": "/home/stonelukas/.claude/projects/-home-stonelukas-tools-privat-stash-userscripts/dfbd3bc4-14a9-4c19-92a2-42ea09cb002a.jsonl",
+    "cwd": "/home/stonelukas/tools/privat/stash-userscripts",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "mkdir -p /home/stonelukas/tools/privat/stash-userscripts/.claude/steering",
+      "description": "Create steering directory"
+    }
+  },
+  {
+    "session_id": "11481dc6-1fbc-4f21-a685-f45bd6f21ff1",
+    "transcript_path": "/home/stonelukas/.claude/projects/-home-stonelukas-tools-privat-stash-userscripts/11481dc6-1fbc-4f21-a685-f45bd6f21ff1.jsonl",
+    "cwd": "/home/stonelukas/tools/privat/stash-userscripts",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "ls -la /home/stonelukas/tools/privat/stash-userscripts/tests/ 2>/dev/null || echo \"Directory does not exist\"",
+      "description": "Check if tests directory exists"
+    }
+  }
+]
