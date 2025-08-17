@@ -1,35 +1,57 @@
 [
   {
-    "session_id": "452c520d-809c-4431-bed4-93456befe6c1",
-    "transcript_path": "/home/stonelukas/.claude/projects/-home-stonelukas-tools-privat-stash-userscripts/452c520d-809c-4431-bed4-93456befe6c1.jsonl",
+    "session_id": "97a23678-2760-4841-84cc-87d3a6f62b28",
+    "transcript_path": "/home/stonelukas/.claude/projects/-home-stonelukas-tools-privat-stash-userscripts/97a23678-2760-4841-84cc-87d3a6f62b28.jsonl",
     "cwd": "/home/stonelukas/tools/privat/stash-userscripts",
     "hook_event_name": "PreToolUse",
     "tool_name": "Bash",
     "tool_input": {
-      "command": "mkdir -p .claude/specs/widget-system-enhancements",
-      "description": "Create spec directory for widget enhancements"
+      "command": "git status",
+      "description": "Check current status"
     }
   },
   {
-    "session_id": "dfbd3bc4-14a9-4c19-92a2-42ea09cb002a",
-    "transcript_path": "/home/stonelukas/.claude/projects/-home-stonelukas-tools-privat-stash-userscripts/dfbd3bc4-14a9-4c19-92a2-42ea09cb002a.jsonl",
+    "session_id": "97a23678-2760-4841-84cc-87d3a6f62b28",
+    "transcript_path": "/home/stonelukas/.claude/projects/-home-stonelukas-tools-privat-stash-userscripts/97a23678-2760-4841-84cc-87d3a6f62b28.jsonl",
     "cwd": "/home/stonelukas/tools/privat/stash-userscripts",
     "hook_event_name": "PreToolUse",
     "tool_name": "Bash",
     "tool_input": {
-      "command": "mkdir -p /home/stonelukas/tools/privat/stash-userscripts/.claude/steering",
-      "description": "Create steering directory"
+      "command": "git log --oneline -n 5",
+      "description": "Verify current HEAD"
     }
   },
   {
-    "session_id": "11481dc6-1fbc-4f21-a685-f45bd6f21ff1",
-    "transcript_path": "/home/stonelukas/.claude/projects/-home-stonelukas-tools-privat-stash-userscripts/11481dc6-1fbc-4f21-a685-f45bd6f21ff1.jsonl",
+    "session_id": "97a23678-2760-4841-84cc-87d3a6f62b28",
+    "transcript_path": "/home/stonelukas/.claude/projects/-home-stonelukas-tools-privat-stash-userscripts/97a23678-2760-4841-84cc-87d3a6f62b28.jsonl",
     "cwd": "/home/stonelukas/tools/privat/stash-userscripts",
     "hook_event_name": "PreToolUse",
     "tool_name": "Bash",
     "tool_input": {
-      "command": "ls -la /home/stonelukas/tools/privat/stash-userscripts/tests/ 2>/dev/null || echo \"Directory does not exist\"",
-      "description": "Check if tests directory exists"
+      "command": "git fetch origin main && git reset origin/main",
+      "description": "First, let's reset to match remote main (keeping your changes as unstaged)"
+    }
+  },
+  {
+    "session_id": "97a23678-2760-4841-84cc-87d3a6f62b28",
+    "transcript_path": "/home/stonelukas/.claude/projects/-home-stonelukas-tools-privat-stash-userscripts/97a23678-2760-4841-84cc-87d3a6f62b28.jsonl",
+    "cwd": "/home/stonelukas/tools/privat/stash-userscripts",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "git status --short",
+      "description": "See the changes in short format"
+    }
+  },
+  {
+    "session_id": "97a23678-2760-4841-84cc-87d3a6f62b28",
+    "transcript_path": "/home/stonelukas/.claude/projects/-home-stonelukas-tools-privat-stash-userscripts/97a23678-2760-4841-84cc-87d3a6f62b28.jsonl",
+    "cwd": "/home/stonelukas/tools/privat/stash-userscripts",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "git add -A && git commit -m \"Revert to version 5.8.0 state while preserving history\"",
+      "description": "Commit all changes to revert files to v5.8.0 state"
     }
   }
 ]

@@ -2,13 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Steering Documents
-
-Additional steering rules for AI assistants are available in `.claude/steering/`:
-- **[product.md](.claude/steering/product.md)** - Product purpose, features, and business logic rules
-- **[tech.md](.claude/steering/tech.md)** - Tech stack, dependencies, and coding patterns
-- **[structure.md](.claude/steering/structure.md)** - Directory organization and file locations
-
 ## Repository Overview
 
 This is a comprehensive Stash enhancement repository containing userscripts, a native Stash plugin, and a browser extension that automate and enhance Stash (a self-hosted adult content management system).

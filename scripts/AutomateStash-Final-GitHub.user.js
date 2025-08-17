@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         AutomateStash Final Enhanced
 // @namespace    https://github.com/Stonelukas/stash-userscripts
-// @version      5.11.0
-// @description  AutomateStash - with performance enhancements, widget system, and post-automation summary
+// @version      5.8.0
+// @description  AutomateStash - with performance enhancements and post-automation summary widget
 // @author       AutomateStash Team
 // @match        http://localhost:9998/*
 // @exclude      http://localhost:9998/scenes/markers?*
@@ -21,11 +21,6 @@
 // @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/ui-theme-manager.js
 // @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/animation-controller.js
 // @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/keyboard-shortcuts.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/widget-sub-managers.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/drag-manager.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/resize-manager.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/enhanced-widget-manager.js
-// @require      https://raw.githubusercontent.com/Stonelukas/stash-userscripts/main/scripts/lib/widget-manager-integration.js
 // ==/UserScript==
 
 (function () {
@@ -2925,25 +2920,6 @@
                 setTimeout(() => { try { window.schemaWatcher.refreshCache(); } catch (_) { } }, 8000);
             } catch (_) { }
 
-            // Initialize Enhanced Widget Manager Integration
-            this.initializeEnhancedWidgetManager();
-        }
-
-        /**
-         * Initialize integration with EnhancedWidgetManager
-         */
-        initializeEnhancedWidgetManager() {
-            try {
-                // Load EnhancedWidgetManager if available
-                if (typeof window.WidgetManagerIntegration !== 'undefined') {
-                    this.widgetIntegration = new window.WidgetManagerIntegration(this);
-                    console.log('[UIManager] Enhanced widget integration initialized');
-                } else {
-                    console.log('[UIManager] Enhanced widget integration not available, using legacy mode');
-                }
-            } catch (error) {
-                console.error('[UIManager] Failed to initialize enhanced widget integration:', error);
-            }
         }
         saveAllEnhancedSettings() {
             // Save keyboard shortcuts
@@ -10317,22 +10293,6 @@
     window.sourceDetector = sourceDetector;
     window.statusTracker = statusTracker;
     window.historyManager = historyManager;
-    
-    // Initialize Enhanced Widget System if available
-    if (window.EnhancedWidgetManager && window.WidgetManagerIntegration) {
-        try {
-            debugLog('🎨 Initializing Enhanced Widget System...');
-            // Create enhanced widget manager
-            window.enhancedWidgetManager = new window.EnhancedWidgetManager();
-            // Create integration bridge
-            window.widgetIntegration = new window.WidgetManagerIntegration(uiManager, window.enhancedWidgetManager);
-            // Register the main automation panel as a widget
-            window.widgetIntegration.setupAutomationPanel();
-            debugLog('✅ Enhanced Widget System initialized');
-        } catch (error) {
-            debugLog('⚠️ Failed to initialize Enhanced Widget System:', error);
-        }
-    }
 
     // Initialize UI after DOM is ready
     async function initializeUI() {
@@ -10566,7 +10526,6 @@
         if (window.keyboardShortcuts) enhancements.push('Keyboard');
         if (window.animationController) enhancements.push('Animations');
         if (window.performanceConfigManager) enhancements.push('Config');
-        if (window.enhancedWidgetManager) enhancements.push('Enhanced Widgets');
 
         if (enhancements.length > 0) {
             debugLog(`🚀 Enhanced mode active with: ${enhancements.join(', ')}`);
