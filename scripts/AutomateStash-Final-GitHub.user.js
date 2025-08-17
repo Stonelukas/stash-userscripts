@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         AutomateStash Final Enhanced
 // @namespace    https://github.com/Stonelukas/stash-userscripts
-// @version      5.8.0
-// @description  AutomateStash - with performance enhancements and post-automation summary widget
+// @version      5.12.0
+// @description  AutomateStash - revert to the state of version 5.8.0, without performance enhancements and post-automation summary widget
 // @author       AutomateStash Team
 // @match        http://localhost:9998/*
 // @exclude      http://localhost:9998/scenes/markers?*
@@ -169,8 +169,8 @@
             const notification = document.createElement('div');
             // Use UI config for notification position if available
             const positionStyle = (window.stashUIManager && window.stashUIManager.notificationConfig && window.stashUIManager.notificationConfig.position) ||
-                                  { top: '20px', right: '20px' };
-            
+                { top: '20px', right: '20px' };
+
             notification.style.cssText = `
                 position: fixed;
                 ${positionStyle.top ? `top: ${positionStyle.top};` : ''}
@@ -2871,7 +2871,7 @@
                 rescrapeStashDB: false,
                 rescrapeThePornDB: false
             };
-            
+
             // Z-index management for widgets
             this.baseZIndex = 10000;
             this.topZIndex = 10000;
@@ -2925,24 +2925,24 @@
             // Save keyboard shortcuts
             const shortcuts = window.keyboardShortcuts ? window.keyboardShortcuts.exportConfig() : {};
             GM_setValue('keyboard_shortcuts', JSON.stringify(shortcuts));
-            
+
             // Save performance configuration
             if (window.performanceConfigManager) {
                 const perfConfig = window.performanceConfigManager.export();
                 GM_setValue('performance_config', perfConfig);
             }
-            
+
             // Save theme settings
             if (window.themeManager) {
                 GM_setValue('ui_theme', window.themeManager.currentTheme);
             }
-            
+
             // Save animation settings (already saved individually in the UI)
             // Animation settings are saved when the Save button is clicked
-            
+
             console.log('✅ All enhanced settings saved');
         }
-        
+
         showEnhancedSettings() {
             // Close any existing dialog
             const existing = document.getElementById('enhanced-settings-dialog');
@@ -2979,7 +2979,7 @@
                 cursor: move;
                 user-select: none;
             `;
-            
+
             // Make dialog draggable by the header
             this.makeDraggable(header, dialog, 'enhanced-settings');
 
@@ -3017,7 +3017,7 @@
                     transition: all 0.2s;
                     font-size: 13px;
                 `;
-                
+
                 button.addEventListener('click', () => {
                     // Reset all tabs
                     tabButtons.forEach(b => {
@@ -3025,7 +3025,7 @@
                         b.style.borderColor = 'rgba(255,255,255,0.2)';
                     });
                     tabContents.forEach(c => c.style.display = 'none');
-                    
+
                     // Activate this tab
                     button.style.background = '#3498db';
                     button.style.borderColor = '#3498db';
@@ -3035,7 +3035,7 @@
                 tabButtons.push(button);
                 tabContents.push(content);
                 tabs.appendChild(button);
-                
+
                 return content;
             };
 
@@ -3102,14 +3102,14 @@
 
             // Register widget for z-index management
             this.registerWidget(dialog);
-            
+
             // Add animation if available using saved settings
             document.body.appendChild(dialog);
             if (window.animationController && window.animationController.animate) {
                 const savedAnimSettings = GM_getValue('widget_animations', null);
                 const animSettings = savedAnimSettings ? JSON.parse(savedAnimSettings) : {};
                 const dialogSettings = animSettings['enhanced-settings'] || { animation: 'fadeInScale', duration: 300, easing: 'ease-out' };
-                
+
                 window.animationController.animate(dialog, dialogSettings.animation, {
                     duration: dialogSettings.duration,
                     easing: dialogSettings.easing
@@ -3119,7 +3119,7 @@
 
         createPerformanceTab() {
             const container = document.createElement('div');
-            
+
             const title = document.createElement('h3');
             title.textContent = 'Performance Metrics';
             title.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
@@ -3133,13 +3133,13 @@
                 border-radius: 8px;
                 margin-bottom: 15px;
             `;
-            
+
             const updateScore = () => {
-                const score = window.performanceConfigManager ? 
+                const score = window.performanceConfigManager ?
                     window.performanceConfigManager.getPerformanceScore() : 'N/A';
-                const metrics = window.performanceMonitor ? 
+                const metrics = window.performanceMonitor ?
                     window.performanceMonitor.getSummary() : {};
-                
+
                 scoreDiv.innerHTML = `
                     <div style="font-size: 24px; color: #3498db; margin-bottom: 10px;">
                         Performance Score: ${score}/100
@@ -3152,7 +3152,7 @@
                     </div>
                 `;
             };
-            
+
             updateScore();
             setInterval(updateScore, 2000);
             container.appendChild(scoreDiv);
@@ -3176,9 +3176,9 @@
                     <option value="debug">Debug</option>
                 </select>
             `;
-            
+
             const profileSelect = profileDiv.querySelector('select');
-            
+
             // Load saved profile on initialization
             const savedProfile = GM_getValue('performance_profile', 'balanced');
             if (savedProfile && profileSelect) {
@@ -3187,7 +3187,7 @@
                     window.performanceConfigManager.applyProfile(savedProfile);
                 }
             }
-            
+
             profileSelect.addEventListener('change', (e) => {
                 const selectedProfile = e.target.value;
                 if (window.performanceConfigManager) {
@@ -3198,7 +3198,7 @@
                     updateScore();
                 }
             });
-            
+
             container.appendChild(profileDiv);
 
             // Clear metrics button
@@ -3227,7 +3227,7 @@
 
         createThemeTab() {
             const container = document.createElement('div');
-            
+
             const title = document.createElement('h3');
             title.textContent = 'Theme Settings';
             title.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
@@ -3252,24 +3252,24 @@
                     transition: all 0.2s;
                     border: 2px solid transparent;
                 `;
-                
+
                 themeCard.innerHTML = `
                     <div style="font-weight: bold; color: #ecf0f1; margin-bottom: 5px;">
                         ${themeName.charAt(0).toUpperCase() + themeName.slice(1)}
                     </div>
                     <div style="color: #95a5a6; font-size: 12px;">
                         ${themeName === 'dark' ? 'Default dark theme' :
-                          themeName === 'light' ? 'Bright light theme' :
-                          themeName === 'midnight' ? 'Deep blue theme' :
-                          'Ocean blue theme'}
+                        themeName === 'light' ? 'Bright light theme' :
+                            themeName === 'midnight' ? 'Deep blue theme' :
+                                'Ocean blue theme'}
                     </div>
                 `;
-                
+
                 themeCard.addEventListener('click', () => {
                     if (window.themeManager && window.themeManager.applyTheme) {
                         window.themeManager.applyTheme(themeName);
                         notifications.show(`Applied ${themeName} theme`, 'success');
-                        
+
                         // Update selection
                         themeGrid.querySelectorAll('div').forEach(card => {
                             card.style.borderColor = 'transparent';
@@ -3277,10 +3277,10 @@
                         themeCard.style.borderColor = '#3498db';
                     }
                 });
-                
+
                 themeGrid.appendChild(themeCard);
             });
-            
+
             container.appendChild(themeGrid);
 
             // Custom CSS input
@@ -3298,7 +3298,7 @@
                     font-family: monospace;
                 " placeholder="Enter custom CSS here..."></textarea>
             `;
-            
+
             const applyCustomBtn = document.createElement('button');
             applyCustomBtn.textContent = 'Apply Custom CSS';
             applyCustomBtn.style.cssText = `
@@ -3317,7 +3317,7 @@
                     notifications.show('Custom CSS applied', 'success');
                 }
             });
-            
+
             customDiv.appendChild(applyCustomBtn);
             container.appendChild(customDiv);
 
@@ -3326,7 +3326,7 @@
 
         createCacheTab() {
             const container = document.createElement('div');
-            
+
             const title = document.createElement('h3');
             title.textContent = 'Cache Statistics';
             title.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
@@ -3339,13 +3339,13 @@
                 border-radius: 8px;
                 margin-bottom: 15px;
             `;
-            
+
             const updateStats = () => {
-                const stats = window.cacheManager ? 
+                const stats = window.cacheManager ?
                     window.cacheManager.getAllStats() : {};
-                
+
                 let html = '<div style="color: #ecf0f1;">';
-                
+
                 if (stats.global) {
                     html += `
                         <h4 style="margin-bottom: 10px;">Global Statistics</h4>
@@ -3357,7 +3357,7 @@
                         </div>
                     `;
                 }
-                
+
                 if (stats.stores) {
                     html += '<h4 style="margin-top: 15px; margin-bottom: 10px;">Store Statistics</h4>';
                     Object.entries(stats.stores).forEach(([name, store]) => {
@@ -3371,11 +3371,11 @@
                         `;
                     });
                 }
-                
+
                 html += '</div>';
                 statsDiv.innerHTML = html;
             };
-            
+
             updateStats();
             setInterval(updateStats, 2000);
             container.appendChild(statsDiv);
@@ -3383,7 +3383,7 @@
             // Cache control buttons
             const buttonsDiv = document.createElement('div');
             buttonsDiv.style.cssText = 'display: flex; gap: 10px;';
-            
+
             const clearCacheBtn = document.createElement('button');
             clearCacheBtn.textContent = 'Clear All Cache';
             clearCacheBtn.style.cssText = `
@@ -3404,7 +3404,7 @@
                     updateStats();
                 }
             });
-            
+
             const warmupBtn = document.createElement('button');
             warmupBtn.textContent = 'Warm Cache';
             warmupBtn.style.cssText = `
@@ -3422,7 +3422,7 @@
                     updateStats();
                 }
             });
-            
+
             buttonsDiv.appendChild(clearCacheBtn);
             buttonsDiv.appendChild(warmupBtn);
             container.appendChild(buttonsDiv);
@@ -3432,7 +3432,7 @@
 
         createKeyboardTab() {
             const container = document.createElement('div');
-            
+
             const title = document.createElement('h3');
             title.textContent = 'Keyboard Shortcuts';
             title.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
@@ -3479,7 +3479,7 @@
             // Add and Edit buttons
             const buttonContainer = document.createElement('div');
             buttonContainer.style.cssText = 'margin-bottom: 15px; display: flex; gap: 10px;';
-            
+
             const addBtn = document.createElement('button');
             addBtn.textContent = '+ Add Shortcut';
             addBtn.style.cssText = `
@@ -3491,7 +3491,7 @@
                 cursor: pointer;
                 font-size: 14px;
             `;
-            
+
             const resetBtn = document.createElement('button');
             resetBtn.textContent = 'Reset to Defaults';
             resetBtn.style.cssText = `
@@ -3503,7 +3503,7 @@
                 cursor: pointer;
                 font-size: 14px;
             `;
-            
+
             buttonContainer.appendChild(addBtn);
             buttonContainer.appendChild(resetBtn);
             container.appendChild(buttonContainer);
@@ -3513,7 +3513,7 @@
                 width: 100%;
                 border-collapse: collapse;
             `;
-            
+
             const thead = document.createElement('thead');
             thead.innerHTML = `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.2);">
@@ -3524,10 +3524,10 @@
                 </tr>
             `;
             table.appendChild(thead);
-            
+
             const tbody = document.createElement('tbody');
             tbody.id = 'keyboard-shortcuts-tbody';
-            
+
             // Function to render shortcuts
             const renderShortcuts = () => {
                 tbody.innerHTML = '';
@@ -3573,14 +3573,14 @@
                     `;
                     tbody.appendChild(row);
                 });
-                
+
                 // Add event listeners for edit buttons
                 tbody.querySelectorAll('.edit-shortcut-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         const index = parseInt(e.target.dataset.index);
                         const input = tbody.querySelector(`.shortcut-key-input[data-index="${index}"]`);
                         const newKey = input.value.trim();
-                        
+
                         if (newKey && window.keyboardShortcuts) {
                             const shortcut = shortcuts[index];
                             // Unregister old shortcut
@@ -3597,27 +3597,27 @@
                         }
                     });
                 });
-                
+
                 // Add event listeners for delete buttons
                 tbody.querySelectorAll('.delete-shortcut-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         const index = parseInt(e.target.dataset.index);
                         const shortcut = shortcuts[index];
-                        
+
                         if (window.keyboardShortcuts && window.keyboardShortcuts.unregisterShortcut) {
                             window.keyboardShortcuts.unregisterShortcut(shortcut.originalKey || shortcut.key);
                         }
-                        
+
                         shortcuts.splice(index, 1);
                         renderShortcuts();
                         notifications.show('Shortcut removed', 'info');
                     });
                 });
             };
-            
+
             // Initial render
             renderShortcuts();
-            
+
             // Add button event listener
             addBtn.addEventListener('click', () => {
                 // Show dialog to select action
@@ -3636,10 +3636,10 @@
                     max-height: 80vh;
                     overflow-y: auto;
                 `;
-                
+
                 // Get already assigned actions
                 const assignedActions = new Set(shortcuts.map(s => s.action));
-                
+
                 // Available actions - comprehensive list
                 const allActions = [
                     // Automation Actions
@@ -3649,7 +3649,7 @@
                     { action: 'pauseAutomation', description: 'Pause automation', category: 'Automation' },
                     { action: 'resumeAutomation', description: 'Resume automation', category: 'Automation' },
                     { action: 'skipCurrentSource', description: 'Skip current scraper source', category: 'Automation' },
-                    
+
                     // UI Actions
                     { action: 'toggleMinimize', description: 'Toggle minimize panel', category: 'UI' },
                     { action: 'openConfig', description: 'Open configuration', category: 'UI' },
@@ -3662,7 +3662,7 @@
                     { action: 'toggleNotifications', description: 'Toggle notifications', category: 'UI' },
                     { action: 'clearNotifications', description: 'Clear all notifications', category: 'UI' },
                     { action: 'refreshUI', description: 'Refresh UI elements', category: 'UI' },
-                    
+
                     // Scene Actions
                     { action: 'applyScrapedData', description: 'Apply scraped data', category: 'Scene' },
                     { action: 'saveScene', description: 'Save scene', category: 'Scene' },
@@ -3672,7 +3672,7 @@
                     { action: 'generatePreview', description: 'Generate preview', category: 'Scene' },
                     { action: 'playScene', description: 'Play scene', category: 'Scene' },
                     { action: 'editScene', description: 'Edit scene details', category: 'Scene' },
-                    
+
                     // Scraping Actions
                     { action: 'scrapeStashDB', description: 'Scrape StashDB', category: 'Scraping' },
                     { action: 'scrapeThePornDB', description: 'Scrape ThePornDB', category: 'Scraping' },
@@ -3682,7 +3682,7 @@
                     { action: 'createPerformers', description: 'Create new performers', category: 'Scraping' },
                     { action: 'createStudios', description: 'Create new studios', category: 'Scraping' },
                     { action: 'createTags', description: 'Create new tags', category: 'Scraping' },
-                    
+
                     // Navigation Actions
                     { action: 'previousScene', description: 'Previous scene', category: 'Navigation' },
                     { action: 'nextScene', description: 'Next scene', category: 'Navigation' },
@@ -3695,7 +3695,7 @@
                     { action: 'goToStudios', description: 'Go to studios page', category: 'Navigation' },
                     { action: 'goToTags', description: 'Go to tags page', category: 'Navigation' },
                     { action: 'goToSettings', description: 'Go to settings page', category: 'Navigation' },
-                    
+
                     // Performance Actions
                     { action: 'clearCache', description: 'Clear all caches', category: 'Performance' },
                     { action: 'clearGraphQLCache', description: 'Clear GraphQL cache', category: 'Performance' },
@@ -3704,7 +3704,7 @@
                     { action: 'exportPerformanceData', description: 'Export performance data', category: 'Performance' },
                     { action: 'optimizePerformance', description: 'Auto-optimize performance', category: 'Performance' },
                     { action: 'toggleCaching', description: 'Toggle caching on/off', category: 'Performance' },
-                    
+
                     // Data Actions
                     { action: 'exportData', description: 'Export current data', category: 'Data' },
                     { action: 'importData', description: 'Import data', category: 'Data' },
@@ -3713,7 +3713,7 @@
                     { action: 'resetSettings', description: 'Reset to defaults', category: 'Data' },
                     { action: 'exportShortcuts', description: 'Export shortcuts', category: 'Data' },
                     { action: 'importShortcuts', description: 'Import shortcuts', category: 'Data' },
-                    
+
                     // Batch Actions
                     { action: 'selectAll', description: 'Select all scenes', category: 'Batch' },
                     { action: 'deselectAll', description: 'Deselect all scenes', category: 'Batch' },
@@ -3722,7 +3722,7 @@
                     { action: 'bulkScrape', description: 'Scrape selected scenes', category: 'Batch' },
                     { action: 'bulkTag', description: 'Tag selected scenes', category: 'Batch' },
                     { action: 'bulkDelete', description: 'Delete selected scenes', category: 'Batch' },
-                    
+
                     // Custom Actions
                     { action: 'customAction1', description: 'Custom Action 1', category: 'Custom' },
                     { action: 'customAction2', description: 'Custom Action 2', category: 'Custom' },
@@ -3731,16 +3731,16 @@
                     { action: 'recordMacro', description: 'Record macro', category: 'Custom' },
                     { action: 'stopMacro', description: 'Stop macro recording', category: 'Custom' }
                 ];
-                
+
                 // Filter out already assigned actions
                 const availableActions = allActions.filter(action => !assignedActions.has(action.action));
-                
+
                 // Check if there are any available actions
                 if (availableActions.length === 0) {
                     notifications.show('All actions already have shortcuts assigned!', 'warning');
                     return;
                 }
-                
+
                 // Group actions by category
                 const groupedActions = {};
                 availableActions.forEach(action => {
@@ -3749,7 +3749,7 @@
                     }
                     groupedActions[action.category].push(action);
                 });
-                
+
                 // Create options HTML with optgroups
                 let optionsHTML = '';
                 Object.keys(groupedActions).sort().forEach(category => {
@@ -3759,7 +3759,7 @@
                     });
                     optionsHTML += '</optgroup>';
                 });
-                
+
                 actionDialog.innerHTML = `
                     <h4 style="color: #ecf0f1; margin-bottom: 15px;">Add New Keyboard Shortcut</h4>
                     <div style="margin-bottom: 15px;">
@@ -3803,23 +3803,23 @@
                         </button>
                     </div>
                 `;
-                
+
                 document.body.appendChild(actionDialog);
-                
+
                 // Focus on key input
                 actionDialog.querySelector('#new-shortcut-key').focus();
-                
+
                 // Event listeners for dialog buttons
                 actionDialog.querySelector('#cancel-new-shortcut').addEventListener('click', () => {
                     actionDialog.remove();
                 });
-                
+
                 actionDialog.querySelector('#confirm-new-shortcut').addEventListener('click', () => {
                     const keyInput = actionDialog.querySelector('#new-shortcut-key');
                     const actionSelect = actionDialog.querySelector('#new-shortcut-action');
                     const contextSelect = actionDialog.querySelector('#new-shortcut-context');
                     const descriptionInput = actionDialog.querySelector('#new-shortcut-description');
-                    
+
                     const selectedAction = availableActions.find(a => a.action === actionSelect.value);
                     const newShortcut = {
                         key: keyInput.value.trim(),
@@ -3828,20 +3828,20 @@
                         description: descriptionInput.value.trim() || (selectedAction ? selectedAction.description : 'Custom Action'),
                         context: contextSelect.value
                     };
-                    
+
                     // Validate key combination
                     if (!newShortcut.key || newShortcut.key === '') {
                         notifications.show('Please enter a valid key combination', 'error');
                         return;
                     }
-                    
+
                     // Check for duplicate shortcuts
                     const duplicate = shortcuts.find(s => s.key === newShortcut.key && s.context === newShortcut.context);
                     if (duplicate) {
                         notifications.show(`Shortcut ${newShortcut.key} already exists in ${newShortcut.context} context`, 'error');
                         return;
                     }
-                    
+
                     // Register the new shortcut
                     if (window.keyboardShortcuts && window.keyboardShortcuts.registerShortcut) {
                         window.keyboardShortcuts.registerShortcut(
@@ -3851,13 +3851,13 @@
                             newShortcut.context
                         );
                     }
-                    
+
                     shortcuts.push(newShortcut);
                     renderShortcuts();
                     actionDialog.remove();
                     notifications.show(`New shortcut added: ${newShortcut.key} → ${newShortcut.description}`, 'success');
                 });
-                
+
                 // Add Enter key support for quick add
                 actionDialog.querySelector('#new-shortcut-key').addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') {
@@ -3865,7 +3865,7 @@
                     }
                 });
             });
-            
+
             // Reset button event listener
             resetBtn.addEventListener('click', () => {
                 if (window.keyboardShortcuts && window.KeyboardShortcutsManager) {
@@ -3875,7 +3875,7 @@
                             window.keyboardShortcuts.unregisterShortcut(s.originalKey || s.key);
                         }
                     });
-                    
+
                     // Re-initialize with defaults
                     const manager = new window.KeyboardShortcutsManager();
                     shortcuts = Object.entries(manager.defaultShortcuts).map(([key, info]) => {
@@ -3895,7 +3895,7 @@
                     notifications.show('Shortcuts reset to defaults', 'success');
                 }
             });
-            
+
             table.appendChild(tbody);
             container.appendChild(table);
 
@@ -3904,7 +3904,7 @@
 
         createAnimationTab() {
             const container = document.createElement('div');
-            
+
             const title = document.createElement('h3');
             title.textContent = 'Animation Settings';
             title.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
@@ -3919,7 +3919,7 @@
                     Enable Animations
                 </label>
             `;
-            
+
             const animToggle = toggleDiv.querySelector('input');
             animToggle.addEventListener('change', (e) => {
                 if (window.animationController) {
@@ -3945,7 +3945,7 @@
                     <span>Fast</span>
                 </div>
             `;
-            
+
             const speedSlider = speedDiv.querySelector('input');
             const speedValue = speedDiv.querySelector('#speed-value');
             speedSlider.addEventListener('input', (e) => {
@@ -3963,23 +3963,23 @@
             widgetAnimDiv.innerHTML = `
                 <h4 style="color: #ecf0f1; margin-bottom: 15px;">Widget Animations</h4>
             `;
-            
+
             // Available animations from animation-controller.js
             const availableAnimations = [
-                'fadeIn', 'fadeOut', 'slideInRight', 'slideInLeft', 'slideInUp', 
+                'fadeIn', 'fadeOut', 'slideInRight', 'slideInLeft', 'slideInUp',
                 'slideOutRight', 'slideOutLeft', 'slideOutDown', 'scaleIn', 'scaleOut',
                 'rotateIn', 'shake', 'pulse', 'bounce', 'spin', 'shimmer'
             ];
-            
+
             const easingOptions = [
                 'linear', 'ease', 'easeIn', 'easeOut', 'easeInOut',
                 'spring', 'bounce', 'easeInQuad', 'easeOutQuad', 'easeInOutQuad'
             ];
-            
+
             // Load saved animation settings
             const savedAnimSettings = GM_getValue('widget_animations', null);
             const animSettings = savedAnimSettings ? JSON.parse(savedAnimSettings) : {};
-            
+
             // Widget animation configurations with saved or default values
             const widgetConfigs = [
                 { id: 'main-panel', name: 'Main Panel', defaultAnim: 'fadeIn', defaultDuration: 300 },
@@ -3994,37 +3994,37 @@
                 defaultDuration: animSettings[config.id]?.duration || config.defaultDuration,
                 defaultEasing: animSettings[config.id]?.easing || 'ease'
             }));
-            
+
             widgetConfigs.forEach(widget => {
                 const widgetRow = document.createElement('div');
                 widgetRow.style.cssText = 'margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 4px;';
-                
+
                 widgetRow.innerHTML = `
                     <div style="display: grid; grid-template-columns: 150px 1fr 100px 120px 80px; gap: 10px; align-items: center;">
                         <label style="color: #ecf0f1; font-size: 13px;">${widget.name}:</label>
                         <select class="anim-select" data-widget="${widget.id}" style="background: #34495e; color: white; border: 1px solid #556d7f; padding: 5px; border-radius: 4px;">
-                            ${availableAnimations.map(anim => 
-                                `<option value="${anim}" ${anim === widget.defaultAnim ? 'selected' : ''}>${anim}</option>`
-                            ).join('')}
+                            ${availableAnimations.map(anim =>
+                    `<option value="${anim}" ${anim === widget.defaultAnim ? 'selected' : ''}>${anim}</option>`
+                ).join('')}
                         </select>
                         <input type="number" class="duration-input" data-widget="${widget.id}" 
                                value="${widget.defaultDuration}" min="100" max="2000" step="50"
                                style="background: #34495e; color: white; border: 1px solid #556d7f; padding: 5px; border-radius: 4px;"
                                placeholder="Duration (ms)">
                         <select class="easing-select" data-widget="${widget.id}" style="background: #34495e; color: white; border: 1px solid #556d7f; padding: 5px; border-radius: 4px;">
-                            ${easingOptions.map(easing => 
-                                `<option value="${easing}" ${easing === widget.defaultEasing ? 'selected' : ''}>${easing}</option>`
-                            ).join('')}
+                            ${easingOptions.map(easing =>
+                    `<option value="${easing}" ${easing === widget.defaultEasing ? 'selected' : ''}>${easing}</option>`
+                ).join('')}
                         </select>
                         <button class="preview-btn" data-widget="${widget.id}" style="background: #667eea; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
                             Preview
                         </button>
                     </div>
                 `;
-                
+
                 widgetAnimDiv.appendChild(widgetRow);
             });
-            
+
             // Save animations button
             const saveAnimBtn = document.createElement('button');
             saveAnimBtn.textContent = 'Save Animation Settings';
@@ -4044,19 +4044,19 @@
                     const animSelect = widgetAnimDiv.querySelector(`.anim-select[data-widget="${widget.id}"]`);
                     const durationInput = widgetAnimDiv.querySelector(`.duration-input[data-widget="${widget.id}"]`);
                     const easingSelect = widgetAnimDiv.querySelector(`.easing-select[data-widget="${widget.id}"]`);
-                    
+
                     animSettings[widget.id] = {
                         animation: animSelect.value,
                         duration: parseInt(durationInput.value),
                         easing: easingSelect.value
                     };
                 });
-                
+
                 GM_setValue('widget_animations', JSON.stringify(animSettings));
                 notifications.show('Animation settings saved!', 'success');
             });
             widgetAnimDiv.appendChild(saveAnimBtn);
-            
+
             container.appendChild(widgetAnimDiv);
 
             // Animation preview
@@ -4065,7 +4065,7 @@
                 <h4 style="color: #ecf0f1; margin-bottom: 10px;">Quick Animation Preview</h4>
                 <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
             `;
-            
+
             const quickAnimations = ['fadeIn', 'slideInRight', 'bounce', 'pulse', 'shake', 'scaleIn', 'rotateIn', 'shimmer'];
             quickAnimations.forEach(anim => {
                 const btn = document.createElement('button');
@@ -4094,9 +4094,9 @@
                 });
                 previewDiv.querySelector('div').appendChild(btn);
             });
-            
+
             container.appendChild(previewDiv);
-            
+
             // Add event listeners for preview buttons
             widgetAnimDiv.querySelectorAll('.preview-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -4104,13 +4104,13 @@
                     const animSelect = widgetAnimDiv.querySelector(`.anim-select[data-widget="${widgetId}"]`);
                     const durationInput = widgetAnimDiv.querySelector(`.duration-input[data-widget="${widgetId}"]`);
                     const easingSelect = widgetAnimDiv.querySelector(`.easing-select[data-widget="${widgetId}"]`);
-                    
+
                     // Find the corresponding widget or use the button itself as preview
                     let targetElement = document.querySelector(`#${widgetId}`);
                     if (!targetElement) {
                         targetElement = e.target;
                     }
-                    
+
                     if (window.animationController && window.animationController.animate) {
                         window.animationController.animate(targetElement, animSelect.value, {
                             duration: parseInt(durationInput.value),
@@ -4126,7 +4126,7 @@
         createConfigTab() {
             const container = document.createElement('div');
             container.style.cssText = 'max-height: 500px; overflow-y: auto;';
-            
+
             const title = document.createElement('h3');
             title.textContent = 'Advanced Configuration';
             title.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
@@ -4220,29 +4220,29 @@
             sections.forEach(section => {
                 const sectionDiv = document.createElement('div');
                 sectionDiv.style.cssText = 'margin-bottom: 25px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px;';
-                
+
                 const sectionTitle = document.createElement('h4');
                 sectionTitle.textContent = section.title;
                 sectionTitle.style.cssText = 'color: #ecf0f1; margin-bottom: 15px; font-size: 14px;';
                 sectionDiv.appendChild(sectionTitle);
-                
+
                 section.settings.forEach(setting => {
                     const settingDiv = document.createElement('div');
                     settingDiv.style.cssText = 'margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;';
-                    
+
                     const label = document.createElement('label');
                     label.textContent = setting.label;
                     label.style.cssText = 'color: #bdc3c7; font-size: 12px; flex: 1;';
-                    
+
                     let input;
                     const currentValue = window.performanceConfigManager?.get(setting.path);
-                    
+
                     if (setting.type === 'checkbox') {
                         input = document.createElement('input');
                         input.type = 'checkbox';
                         input.checked = currentValue || false;
                         input.style.cssText = 'cursor: pointer;';
-                        
+
                         input.addEventListener('change', (e) => {
                             if (window.performanceConfigManager) {
                                 window.performanceConfigManager.set(setting.path, e.target.checked);
@@ -4254,7 +4254,7 @@
                     } else if (setting.type === 'slider') {
                         const sliderContainer = document.createElement('div');
                         sliderContainer.style.cssText = 'display: flex; align-items: center; gap: 10px;';
-                        
+
                         input = document.createElement('input');
                         input.type = 'range';
                         input.min = setting.min;
@@ -4262,11 +4262,11 @@
                         input.step = setting.step;
                         input.value = currentValue || setting.min;
                         input.style.cssText = 'width: 100px;';
-                        
+
                         const valueDisplay = document.createElement('span');
                         valueDisplay.textContent = input.value;
                         valueDisplay.style.cssText = 'color: #ecf0f1; min-width: 40px; text-align: right;';
-                        
+
                         input.addEventListener('input', (e) => {
                             valueDisplay.textContent = e.target.value;
                             if (window.performanceConfigManager) {
@@ -4275,7 +4275,7 @@
                                 this.applyConfigSettings();
                             }
                         });
-                        
+
                         sliderContainer.appendChild(input);
                         sliderContainer.appendChild(valueDisplay);
                         input = sliderContainer;
@@ -4286,7 +4286,7 @@
                         input.max = setting.max;
                         input.value = currentValue || setting.min;
                         input.style.cssText = 'width: 80px; padding: 4px; background: #34495e; color: white; border: 1px solid #556d7f; border-radius: 4px;';
-                        
+
                         input.addEventListener('change', (e) => {
                             const value = parseInt(e.target.value);
                             if (window.performanceConfigManager && !isNaN(value)) {
@@ -4297,31 +4297,31 @@
                             }
                         });
                     }
-                    
+
                     settingDiv.appendChild(label);
                     settingDiv.appendChild(input);
                     sectionDiv.appendChild(settingDiv);
                 });
-                
+
                 container.appendChild(sectionDiv);
             });
 
             // Add performance profiles section
             const profilesDiv = document.createElement('div');
             profilesDiv.style.cssText = 'margin-bottom: 25px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px;';
-            
+
             const profilesTitle = document.createElement('h4');
             profilesTitle.textContent = '🎯 Performance Profiles';
             profilesTitle.style.cssText = 'color: #ecf0f1; margin-bottom: 15px;';
             profilesDiv.appendChild(profilesTitle);
-            
+
             const profiles = [
                 { name: 'balanced', label: 'Balanced', description: 'Good mix of performance and features' },
                 { name: 'performance', label: 'High Performance', description: 'Maximum performance, all optimizations' },
                 { name: 'lowResource', label: 'Low Resource', description: 'Minimal resource usage' },
                 { name: 'debug', label: 'Debug Mode', description: 'Enable all logging and debugging' }
             ];
-            
+
             profiles.forEach(profile => {
                 const profileBtn = document.createElement('button');
                 profileBtn.style.cssText = `
@@ -4340,7 +4340,7 @@
                     <div style="font-weight: bold;">${profile.label}</div>
                     <div style="font-size: 11px; opacity: 0.9; margin-top: 4px;">${profile.description}</div>
                 `;
-                
+
                 profileBtn.addEventListener('click', () => {
                     if (window.performanceConfigManager) {
                         window.performanceConfigManager.applyProfile(profile.name);
@@ -4350,10 +4350,10 @@
                         this.applyConfigSettings();
                     }
                 });
-                
+
                 profilesDiv.appendChild(profileBtn);
             });
-            
+
             container.appendChild(profilesDiv);
 
             // Export/Import config
@@ -4363,7 +4363,7 @@
                 <h4 style="color: #ecf0f1; margin-bottom: 10px;">🔧 Configuration Backup</h4>
                 <div style="display: flex; gap: 10px;">
             `;
-            
+
             const exportBtn = document.createElement('button');
             exportBtn.textContent = 'Export Config';
             exportBtn.style.cssText = `
@@ -4388,7 +4388,7 @@
                     notifications.show('Configuration exported', 'success');
                 }
             });
-            
+
             const importBtn = document.createElement('button');
             importBtn.textContent = 'Import Config';
             importBtn.style.cssText = `
@@ -4417,7 +4417,7 @@
                 });
                 input.click();
             });
-            
+
             const resetBtn = document.createElement('button');
             resetBtn.textContent = 'Reset to Defaults';
             resetBtn.style.cssText = `
@@ -4440,13 +4440,13 @@
                     }
                 }
             });
-            
+
             const buttonsDiv = document.createElement('div');
             buttonsDiv.style.cssText = 'display: flex; gap: 10px;';
             buttonsDiv.appendChild(exportBtn);
             buttonsDiv.appendChild(importBtn);
             buttonsDiv.appendChild(resetBtn);
-            
+
             backupDiv.appendChild(buttonsDiv);
             container.appendChild(backupDiv);
 
@@ -4457,25 +4457,25 @@
                 padding: 15px;
                 border-radius: 8px;
             `;
-            
+
             const updateSuggestions = () => {
-                const suggestions = window.performanceConfigManager ? 
+                const suggestions = window.performanceConfigManager ?
                     window.performanceConfigManager.getOptimizationSuggestions() : [];
-                
+
                 suggestionsDiv.innerHTML = '<h4 style="color: #ecf0f1; margin-bottom: 10px;">Optimization Suggestions</h4>';
-                
+
                 if (suggestions.length > 0) {
                     suggestions.forEach((suggestion, index) => {
-                        const color = suggestion.priority === 'high' ? '#e74c3c' : 
-                                     suggestion.priority === 'medium' ? '#f39c12' : '#95a5a6';
-                        
+                        const color = suggestion.priority === 'high' ? '#e74c3c' :
+                            suggestion.priority === 'medium' ? '#f39c12' : '#95a5a6';
+
                         const suggestionDiv = document.createElement('div');
                         suggestionDiv.style.cssText = 'margin-bottom: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px;';
-                        
+
                         // Create apply button for each suggestion
                         let applyButton = '';
                         let actionFunction = null;
-                        
+
                         if (suggestion.message.includes('Low cache hit rate')) {
                             applyButton = `<button class="apply-suggestion-btn" data-action="increase-cache" style="
                                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -4510,35 +4510,35 @@
                                 margin-top: 8px;
                             ">Enable Performance Mode</button>`;
                         }
-                        
+
                         suggestionDiv.innerHTML = `
                             <div style="color: ${color}; font-weight: bold;">${suggestion.message}</div>
                             <div style="color: #95a5a6; font-size: 12px; margin-top: 5px;">${suggestion.action}</div>
                             ${applyButton}
                         `;
-                        
+
                         suggestionsDiv.appendChild(suggestionDiv);
-                        
+
                         // Add event listeners to apply buttons
                         const btn = suggestionDiv.querySelector('.apply-suggestion-btn');
                         if (btn) {
                             btn.addEventListener('click', (e) => {
                                 const action = e.target.dataset.action;
-                                
+
                                 if (action === 'increase-cache' && window.performanceConfigManager) {
                                     // Increase cache sizes
                                     window.performanceConfigManager.set('cache.graphql.maxSize', 400);
                                     window.performanceConfigManager.set('cache.graphql.ttl', 900000);
                                     window.performanceConfigManager.set('cache.scraper.maxSize', 200);
                                     window.performanceConfigManager.set('cache.general.maxSize', 200);
-                                    
+
                                     // Also adjust cache manager if available
                                     if (window.cacheManager) {
                                         window.cacheManager.stores.forEach((store, name) => {
                                             store.maxSize = Math.min(store.maxSize * 1.5, 500);
                                         });
                                     }
-                                    
+
                                     notifications.show('Cache sizes increased and TTL values adjusted', 'success');
                                     updateSuggestions();
                                 } else if (action === 'reduce-memory' && window.performanceConfigManager) {
@@ -4547,12 +4547,12 @@
                                     window.performanceConfigManager.set('memory.cleanupThreshold', 50 * 1024 * 1024);
                                     window.performanceConfigManager.set('cache.graphql.maxSize', 100);
                                     window.performanceConfigManager.set('cache.dom.maxSize', 25);
-                                    
+
                                     // Trigger immediate cleanup
                                     if (window.cacheManager) {
                                         window.cacheManager.cleanup();
                                     }
-                                    
+
                                     notifications.show('Memory optimization enabled and cache sizes reduced', 'success');
                                     updateSuggestions();
                                 } else if (action === 'enable-batching' && window.performanceConfigManager) {
@@ -4561,10 +4561,10 @@
                                     window.performanceConfigManager.set('taskQueue.enabled', true);
                                     window.performanceConfigManager.set('taskQueue.defaultConcurrency', 5);
                                     window.performanceConfigManager.set('network.requestBatching', true);
-                                    
+
                                     // Apply performance profile
                                     window.performanceConfigManager.applyProfile('performance');
-                                    
+
                                     notifications.show('Performance optimizations enabled', 'success');
                                     updateSuggestions();
                                 }
@@ -4578,7 +4578,7 @@
                     suggestionsDiv.appendChild(successDiv);
                 }
             };
-            
+
             updateSuggestions();
             setInterval(updateSuggestions, 5000);
             container.appendChild(suggestionsDiv);
@@ -4680,7 +4680,7 @@
 
             // Register widget for z-index management
             this.registerWidget(widget);
-            
+
             // Apply entrance animation
             if (window.animationController) {
                 window.animationController.animate(widget, 'fadeIn', {
@@ -4726,13 +4726,13 @@
             this.topZIndex++;
             widgetElement.style.zIndex = this.topZIndex;
         }
-        
+
         /**
          * Register widget for z-index management
          */
         registerWidget(widgetElement, name) {
             this.widgets.set(name, widgetElement);
-            
+
             // Add click handler to bring to front
             widgetElement.addEventListener('mousedown', () => {
                 this.bringToFront(widgetElement);
@@ -4748,24 +4748,24 @@
             // Get performance stats
             if (window.performanceMonitor) {
                 const summary = window.performanceMonitor.getSummary();
-                
+
                 // Check if we have actual metrics
                 const hasMetrics = summary.totalMetrics > 0;
-                
+
                 metrics.push({
                     label: 'Avg Execution',
-                    value: hasMetrics && summary.averageExecutionTime ? 
+                    value: hasMetrics && summary.averageExecutionTime ?
                         `${summary.averageExecutionTime.toFixed(1)}ms` : 'N/A',
-                    color: !hasMetrics ? '#95a5a6' : 
+                    color: !hasMetrics ? '#95a5a6' :
                         summary.averageExecutionTime > 100 ? '#e74c3c' : '#27ae60'
                 });
-                
+
                 metrics.push({
                     label: 'DOM Ops',
                     value: summary.totalDOMOperations || 0,
                     color: summary.totalDOMOperations > 50 ? '#e67e22' : '#27ae60'
                 });
-                
+
                 // Add total operations metric
                 metrics.push({
                     label: 'Total Ops',
@@ -5100,20 +5100,20 @@
         initializeShortcuts() {
             // Store reference to UIManager for library callbacks
             window.stashUIManager = this;
-            
+
             // Apply configuration settings on initialization
             this.applyConfigSettings();
-            
+
             // Initialize the keyboard shortcuts library if not already initialized
             if (window.KeyboardShortcutsManager && !window.keyboardShortcuts) {
                 // Load saved shortcuts or use defaults
                 const savedShortcuts = GM_getValue('keyboard_shortcuts', null);
                 const config = savedShortcuts ? { shortcuts: JSON.parse(savedShortcuts) } : {};
-                
+
                 window.keyboardShortcuts = new window.KeyboardShortcutsManager(config);
                 console.log('🎹 Keyboard shortcuts library initialized');
             }
-            
+
             // Set up action callbacks for the keyboard library
             if (window.keyboardShortcuts) {
                 // Register all action callbacks
@@ -5122,13 +5122,13 @@
                         this.startAutomation();
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('startAutomationSilent', () => {
                     if (!this.automationInProgress) {
                         this.startAutomation(true);
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('toggleMinimize', () => {
                     if (this.isMinimized) {
                         this.expand();
@@ -5136,23 +5136,23 @@
                         this.minimize();
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('cancelAutomation', () => {
                     if (this.automationInProgress) {
                         this.cancelAutomation();
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('openConfig', () => {
                     this.showConfigDialog();
                 });
-                
+
                 window.keyboardShortcuts.onAction('showHelp', () => {
                     if (window.keyboardShortcuts.showHelpDialog) {
                         window.keyboardShortcuts.showHelpDialog();
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('applyScrapedData', () => {
                     const applyBtn = this.findApplyButton();
                     if (applyBtn) {
@@ -5162,7 +5162,7 @@
                         notifications.show('⚠️ No Apply button found', 'warning');
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('saveScene', async () => {
                     try {
                         await this.saveScene();
@@ -5171,7 +5171,7 @@
                         notifications.show('⚠️ Failed to save scene', 'warning');
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('organizeScene', async () => {
                     try {
                         await this.organizeScene();
@@ -5180,11 +5180,11 @@
                         notifications.show('⚠️ Failed to organize scene', 'warning');
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('scrapeStashDB', async () => {
                     // Create an Automator instance on-demand if needed
                     if (!this.automator) {
-                        const Automator = window.Automator || function(){};
+                        const Automator = window.Automator || function () { };
                         this.automator = new Automator(this);
                     }
                     if (this.automator && this.automator.scrapeStashDB) {
@@ -5194,11 +5194,11 @@
                         await this.scrapeStashDB();
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('scrapeThePornDB', async () => {
                     // Create an Automator instance on-demand if needed
                     if (!this.automator) {
-                        const Automator = window.Automator || function(){};
+                        const Automator = window.Automator || function () { };
                         this.automator = new Automator(this);
                     }
                     if (this.automator && this.automator.scrapeThePornDB) {
@@ -5208,7 +5208,7 @@
                         await this.scrapeThePornDB();
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('toggleTheme', () => {
                     if (window.themeManager) {
                         const allThemes = window.themeManager.getAllThemes();
@@ -5224,14 +5224,14 @@
                         this.applyThemeToAllWidgets();
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('togglePerformanceMonitor', () => {
                     const perfWidget = document.getElementById('performance-widget');
                     if (perfWidget) {
                         perfWidget.style.display = perfWidget.style.display === 'none' ? 'block' : 'none';
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('toggleDebugMode', () => {
                     const currentDebug = getConfig(CONFIG.DEBUG);
                     setConfig(CONFIG.DEBUG, !currentDebug);
@@ -5240,31 +5240,31 @@
                     const checkbox = document.querySelector('input[type="checkbox"][data-key="debugMode"]');
                     if (checkbox) checkbox.checked = !currentDebug;
                 });
-                
+
                 // Additional UI Actions
                 window.keyboardShortcuts.onAction('openEnhancedSettings', () => {
                     this.showEnhancedSettings();
                 });
-                
+
                 window.keyboardShortcuts.onAction('toggleSummaryWidget', () => {
                     const widget = document.getElementById('automation-summary-widget');
                     if (widget) {
                         widget.style.display = widget.style.display === 'none' ? 'block' : 'none';
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('toggleNotifications', () => {
                     const enabled = !GM_getValue('notifications_enabled', true);
                     GM_setValue('notifications_enabled', enabled);
                     notifications.show(`Notifications ${enabled ? 'enabled' : 'disabled'}`, 'success');
                 });
-                
+
                 window.keyboardShortcuts.onAction('clearNotifications', () => {
                     const notifs = document.querySelectorAll('.stash-notification');
                     notifs.forEach(n => n.remove());
                     notifications.show('All notifications cleared', 'success');
                 });
-                
+
                 // Performance Actions
                 window.keyboardShortcuts.onAction('clearCache', () => {
                     if (window.cacheManager) {
@@ -5272,21 +5272,21 @@
                         notifications.show('All caches cleared', 'success');
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('clearGraphQLCache', () => {
                     if (window.cacheManager) {
                         window.cacheManager.clear('graphql');
                         notifications.show('GraphQL cache cleared', 'success');
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('clearDOMCache', () => {
                     if (window.cacheManager) {
                         window.cacheManager.clear('dom');
                         notifications.show('DOM cache cleared', 'success');
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('exportPerformanceData', () => {
                     if (window.performanceMonitor) {
                         const data = window.performanceMonitor.exportMetrics();
@@ -5300,45 +5300,45 @@
                         notifications.show('Performance data exported', 'success');
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('optimizePerformance', () => {
                     if (window.performanceConfigManager) {
                         window.performanceConfigManager.applyProfile('performance');
                         notifications.show('Performance optimizations applied', 'success');
                     }
                 });
-                
+
                 // Navigation Actions
                 window.keyboardShortcuts.onAction('previousScene', () => {
                     const prevBtn = document.querySelector('a[title="Previous"]');
                     if (prevBtn) prevBtn.click();
                 });
-                
+
                 window.keyboardShortcuts.onAction('nextScene', () => {
                     const nextBtn = document.querySelector('a[title="Next"]');
                     if (nextBtn) nextBtn.click();
                 });
-                
+
                 window.keyboardShortcuts.onAction('goToScenes', () => {
                     window.location.href = '/scenes';
                 });
-                
+
                 window.keyboardShortcuts.onAction('goToPerformers', () => {
                     window.location.href = '/performers';
                 });
-                
+
                 window.keyboardShortcuts.onAction('goToStudios', () => {
                     window.location.href = '/studios';
                 });
-                
+
                 window.keyboardShortcuts.onAction('goToTags', () => {
                     window.location.href = '/tags';
                 });
-                
+
                 window.keyboardShortcuts.onAction('goToSettings', () => {
                     window.location.href = '/settings';
                 });
-                
+
                 // Data Actions
                 window.keyboardShortcuts.onAction('backupSettings', () => {
                     const settings = {
@@ -5357,7 +5357,7 @@
                     URL.revokeObjectURL(url);
                     notifications.show('Settings backed up successfully', 'success');
                 });
-                
+
                 window.keyboardShortcuts.onAction('restoreSettings', () => {
                     const input = document.createElement('input');
                     input.type = 'file';
@@ -5368,7 +5368,7 @@
                             try {
                                 const text = await file.text();
                                 const settings = JSON.parse(text);
-                                
+
                                 // Restore each setting type
                                 if (settings.config) {
                                     Object.entries(settings.config).forEach(([key, value]) => {
@@ -5390,7 +5390,7 @@
                                 if (settings.animations) {
                                     GM_setValue('widget_animations', settings.animations);
                                 }
-                                
+
                                 notifications.show('Settings restored successfully! Refresh page to apply all changes.', 'success');
                             } catch (error) {
                                 notifications.show('Failed to restore settings: ' + error.message, 'error');
@@ -5399,7 +5399,7 @@
                     });
                     input.click();
                 });
-                
+
                 window.keyboardShortcuts.onAction('resetSettings', () => {
                     if (confirm('Are you sure you want to reset all settings to defaults?')) {
                         // Reset all configs
@@ -5411,11 +5411,11 @@
                         GM_deleteValue('widget_animations');
                         GM_deleteValue('keyboard_shortcuts');
                         GM_deleteValue('performance_config');
-                        
+
                         notifications.show('Settings reset to defaults! Refresh page to apply.', 'success');
                     }
                 });
-                
+
                 // Scraping Actions
                 window.keyboardShortcuts.onAction('scrapeAll', async () => {
                     if (this.automator) {
@@ -5424,7 +5424,7 @@
                         notifications.show('Scraped all sources', 'success');
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('rescrapeScene', async () => {
                     if (this.automator) {
                         // Force re-scrape by clearing status
@@ -5434,33 +5434,33 @@
                         notifications.show('Re-scraped current scene', 'success');
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('createPerformers', async () => {
                     if (this.automator) {
                         await this.automator.createNewPerformers();
                         notifications.show('Created new performers', 'success');
                     }
                 });
-                
+
                 // Batch Actions
                 window.keyboardShortcuts.onAction('selectAll', () => {
                     const checkboxes = document.querySelectorAll('.scene-card input[type="checkbox"]');
                     checkboxes.forEach(cb => cb.checked = true);
                     notifications.show('All scenes selected', 'success');
                 });
-                
+
                 window.keyboardShortcuts.onAction('deselectAll', () => {
                     const checkboxes = document.querySelectorAll('.scene-card input[type="checkbox"]');
                     checkboxes.forEach(cb => cb.checked = false);
                     notifications.show('All scenes deselected', 'success');
                 });
-                
+
                 window.keyboardShortcuts.onAction('invertSelection', () => {
                     const checkboxes = document.querySelectorAll('.scene-card input[type="checkbox"]');
                     checkboxes.forEach(cb => cb.checked = !cb.checked);
                     notifications.show('Selection inverted', 'success');
                 });
-                
+
                 // Automation control actions
                 window.keyboardShortcuts.onAction('pauseAutomation', () => {
                     if (this.automationInProgress) {
@@ -5468,14 +5468,14 @@
                         notifications.show('Automation paused', 'info');
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('resumeAutomation', () => {
                     if (this.automationPaused) {
                         this.automationPaused = false;
                         notifications.show('Automation resumed', 'success');
                     }
                 });
-                
+
                 window.keyboardShortcuts.onAction('skipCurrentSource', () => {
                     if (this.automator) {
                         this.automator.skipCurrentSourceRequested = true;
@@ -5489,11 +5489,11 @@
                     const t = e.target;
                     const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
                     if (typing) return;
-                    
+
                     // Handle ESC key for multiple purposes
                     if (e.key === 'Escape') {
                         e.preventDefault();
-                        
+
                         // Close any open dialogs first
                         const dialogs = [
                             '#enhanced-settings-dialog',
@@ -5501,7 +5501,7 @@
                             '#stash-config-backdrop',
                             '.keyboard-help-dialog'
                         ];
-                        
+
                         let dialogClosed = false;
                         dialogs.forEach(selector => {
                             const dialog = document.querySelector(selector);
@@ -5510,7 +5510,7 @@
                                 dialogClosed = true;
                             }
                         });
-                        
+
                         // If no dialog was closed and automation is running, cancel it
                         if (!dialogClosed && this.automationInProgress) {
                             this.cancelAutomation();
@@ -5523,9 +5523,9 @@
         // Method to apply UI configuration settings
         applyUIConfigSettings() {
             if (!window.uiConfig) return;
-            
+
             const config = window.uiConfig.getConfig();
-            
+
             // Apply notification settings
             if (config.notifications) {
                 const notifPositions = {
@@ -5535,14 +5535,14 @@
                     'bottom-left': { bottom: '20px', left: '20px', top: 'auto', right: 'auto' },
                     'center': { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
                 };
-                
+
                 // Store notification config for use in notification system
                 this.notificationConfig = {
                     ...config.notifications,
                     position: notifPositions[config.notifications.position] || notifPositions['top-right']
                 };
             }
-            
+
             // Apply panel settings
             if (config.panel && this.panel) {
                 if (config.panel.opacity) {
@@ -5552,42 +5552,42 @@
                     this.minimize();
                 }
             }
-            
+
             // Apply dialog settings
             this.dialogConfig = config.dialogs || {};
-            
+
             // Apply button settings
             this.buttonConfig = config.buttons || {};
-            
+
             // Apply automation settings
             if (config.automation) {
                 setConfig(CONFIG.MINIMIZE_WHEN_COMPLETE, config.automation.minimizeOnComplete);
                 setConfig(CONFIG.SHOW_NOTIFICATIONS, config.notifications.enabled);
             }
         }
-        
+
         // Method to apply configuration settings to operations
         applyConfigSettings() {
             if (!window.performanceConfigManager) return;
-            
+
             // Apply monitoring settings
             const monitoringEnabled = window.performanceConfigManager.get('monitoring.enabled');
             if (window.performanceMonitor && monitoringEnabled !== undefined) {
                 window.performanceMonitor.enabled = monitoringEnabled;
             }
-            
+
             // Apply cache settings
             const cacheEnabled = window.performanceConfigManager.get('cache.enabled');
             if (window.cacheManager && cacheEnabled !== undefined) {
                 window.cacheManager.enabled = cacheEnabled;
             }
-            
+
             // Apply DOM batching settings
             const batchingEnabled = window.performanceConfigManager.get('dom.batchingEnabled');
             if (window.domBatchProcessor && batchingEnabled !== undefined) {
                 window.domBatchProcessor.enabled = batchingEnabled;
             }
-            
+
             // Apply network settings
             const requestBatching = window.performanceConfigManager.get('network.requestBatching');
             const requestDeduplication = window.performanceConfigManager.get('network.requestDeduplication');
@@ -5599,13 +5599,13 @@
                     window.graphQLClient.deduplicationEnabled = requestDeduplication;
                 }
             }
-            
+
             // Apply debug settings
             const debugEnabled = window.performanceConfigManager.get('debug.enabled');
             if (debugEnabled !== undefined) {
                 setConfig(CONFIG.DEBUG, debugEnabled);
             }
-            
+
             // Apply memory settings
             const memoryMonitoring = window.performanceConfigManager.get('memory.monitoringEnabled');
             const autoCleanup = window.performanceConfigManager.get('memory.autoCleanup');
@@ -5618,11 +5618,11 @@
                 }
             }
         }
-        
+
         // Add method to apply theme to all widgets
         applyThemeToAllWidgets() {
             if (!window.themeManager) return;
-            
+
             const currentTheme = window.themeManager.currentTheme || 'dark';
             const themeColors = {
                 dark: {
@@ -5646,9 +5646,9 @@
                     border: 'rgba(255,255,255,0.2)'
                 }
             };
-            
+
             const colors = themeColors[currentTheme] || themeColors.dark;
-            
+
             // Apply to all dialogs and widgets
             const widgets = [
                 '#enhanced-settings-dialog',
@@ -5657,7 +5657,7 @@
                 '#performance-widget',
                 '.stash-notification'
             ];
-            
+
             widgets.forEach(selector => {
                 const elements = document.querySelectorAll(selector);
                 elements.forEach(el => {
@@ -5669,7 +5669,7 @@
                 });
             });
         }
-        
+
         // Add the missing cancelAutomation method
         cancelAutomation() {
             this.automationCancelled = true;
@@ -5679,7 +5679,7 @@
             notifications.show('🛑 Automation cancelled', 'warning');
             this.hideCancelButton();
             this.hideSkipButton();
-            
+
             // Reset automation button state if it exists
             if (this.startButton) {
                 this.startButton.disabled = false;
@@ -5687,7 +5687,7 @@
                 this.startButton.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
                 this.startButton.style.cursor = 'pointer';
             }
-            
+
             // Close any open modals (like scraper confirmation)
             const modals = document.querySelectorAll('.modal.show, .modal.fade.show');
             modals.forEach(modal => {
@@ -5695,7 +5695,7 @@
                 if (closeBtn) closeBtn.click();
             });
         }
-        
+
         showShortcutHelp() {
             const map = { ...DEFAULTS[CONFIG.SHORTCUT_MAP], ...(getConfig(CONFIG.SHORTCUT_MAP) || {}) };
             const wrap = document.createElement('div');
@@ -5994,24 +5994,24 @@
             this.panel.appendChild(buttons);
 
             document.body.appendChild(this.panel);
-            
+
             // Apply animation if available using saved settings
             if (window.animationController && window.animationController.animate) {
                 const savedAnimSettings = GM_getValue('widget_animations', null);
                 const animSettings = savedAnimSettings ? JSON.parse(savedAnimSettings) : {};
                 const panelSettings = animSettings['main-panel'] || { animation: 'fadeInUp', duration: 300, easing: 'ease-out' };
-                
+
                 window.animationController.animate(this.panel, panelSettings.animation, {
                     duration: panelSettings.duration,
                     easing: panelSettings.easing
                 });
             }
-            
+
             this.isMinimized = false;
 
             // Initialize status tracking after panel is created
             this.initializeStatusTracking();
-            
+
             // Create performance widget if libraries are available
             if (window.performanceMonitor && window.cacheManager) {
                 this.createPerformanceWidget();
@@ -8341,7 +8341,7 @@
                     if (this.sourceDetector && this.sourceDetector.cache) {
                         this.sourceDetector.cache.clear();
                     }
-                    
+
                     // Clear GraphQL cache
                     if (window.graphQLCache && window.graphQLCache.invalidate) {
                         window.graphQLCache.invalidate('GetScene');
@@ -8349,11 +8349,11 @@
                         // Fallback: clear entire graphql cache store
                         window.cacheManager.clear('graphql');
                     }
-                    
+
                     // Force refresh of status detection
                     await this.statusTracker.detectCurrentStatus();
                     await this.updateStatusFromDOM();
-                    
+
                     // Update and show summary widget 
                     if (this.summaryWidget) {
                         if (this.summaryWidget.updateFromAutomation) {
@@ -8364,7 +8364,7 @@
                             this.summaryWidget.showSummary();
                         }
                     }
-                    
+
                     notifications.show('✅ Automation complete!', 'success');
                 }, 4000);
 
@@ -8670,7 +8670,7 @@
 
         async scrapeStashDB() {
             this.updateSceneStatus('🔍 Scraping...');
-            
+
             // Track performance
             const startTime = performance.now();
 
@@ -8716,7 +8716,7 @@
                 notifications.show(`StashDB scraper found no scene${reason}`, 'warning');
                 return { found: false, skip: true, reason: outcome.reason, notFound };
             }
-            
+
             // Track performance
             if (window.performanceMonitor) {
                 const duration = performance.now() - startTime;
@@ -8728,7 +8728,7 @@
                     timestamp: Date.now()
                 });
             }
-            
+
             // Immediately update status after successful scrape
             if (this.statusTracker) {
                 this.statusTracker.updateStatus('stashdb', {
@@ -8738,7 +8738,7 @@
                 // Force immediate status detection
                 this.statusTracker.detectCurrentStatus();
             }
-            
+
             return { found: true };
         }
 
@@ -8789,7 +8789,7 @@
                 notifications.show(`ThePornDB scraper found no scene${reason}`, 'warning');
                 return { found: false, skip: true, reason: outcome.reason, notFound };
             }
-            
+
             // Immediately update status after successful scrape
             if (this.statusTracker) {
                 this.statusTracker.updateStatus('theporndb', {
@@ -8799,7 +8799,7 @@
                 // Force immediate status detection
                 this.statusTracker.detectCurrentStatus();
             }
-            
+
             return { found: true };
         }
 
@@ -10017,7 +10017,7 @@
                 if (newStatus) {
                     this.updateSceneStatus('✅ Organized');
                     this._organizedAfterSave = true;
-                    
+
                     // Immediately update status tracker
                     if (this.statusTracker) {
                         this.statusTracker.updateStatus('organized', {
@@ -10038,7 +10038,7 @@
             } else {
                 this.updateSceneStatus('✅ Scene already organized');
                 this._organizedAfterSave = true;
-                
+
                 // Immediately update status tracker
                 if (this.statusTracker) {
                     this.statusTracker.updateStatus('organized', {
@@ -10284,7 +10284,7 @@
     // Create global summary widget and make it available
     const globalSummaryWidget = new AutomationSummaryWidget(uiManager, sourceDetector, statusTracker, historyManager);
     window.globalSummaryWidget = globalSummaryWidget;
-    
+
     // Assign to uiManager
     uiManager.summaryWidget = globalSummaryWidget;
 
@@ -10327,7 +10327,7 @@
     // Initialize performance enhancements if available
     function initializeEnhancements() {
         debugLog('🔍 Checking for performance enhancements...');
-        
+
         // Initialize UI configuration if available
         if (window.UIConfig && !window.uiConfig) {
             window.uiConfig = new window.UIConfig();
@@ -10386,89 +10386,89 @@
                         window.stashUIManager.startAutomation();
                     }
                 });
-                
+
                 window.keyboardShortcuts.setActionCallback('startAutomationSilent', () => {
                     if (window.stashUIManager && window.stashUIManager.startAutomation) {
                         window.stashUIManager.startAutomation(true); // Silent mode
                     }
                 });
-                
+
                 window.keyboardShortcuts.setActionCallback('toggleMinimize', () => {
                     if (window.stashUIManager) {
                         window.stashUIManager.isMinimized ? window.stashUIManager.expand() : window.stashUIManager.minimize();
                     }
                 });
-                
+
                 window.keyboardShortcuts.setActionCallback('openConfig', () => {
                     if (window.stashUIManager && window.stashUIManager.showConfigDialog) {
                         window.stashUIManager.showConfigDialog();
                     }
                 });
-                
+
                 window.keyboardShortcuts.setActionCallback('showHelp', () => {
                     if (window.stashUIManager && window.stashUIManager.showHealthDashboard) {
                         window.stashUIManager.showHealthDashboard();
                     }
                 });
-                
+
                 window.keyboardShortcuts.setActionCallback('cancelAutomation', () => {
                     if (window.stashUIManager && window.stashUIManager.automationInProgress) {
                         window.stashUIManager.cancelAutomation();
                     }
                 });
-                
+
                 // Edit panel shortcuts
                 window.keyboardShortcuts.setActionCallback('applyScrapedData', () => {
                     if (window.stashUIManager && window.stashUIManager.applyScrapedData) {
                         window.stashUIManager.applyScrapedData();
                     }
                 });
-                
+
                 window.keyboardShortcuts.setActionCallback('saveScene', () => {
                     if (window.stashUIManager && window.stashUIManager.saveScene) {
                         window.stashUIManager.saveScene();
                     }
                 });
-                
+
                 window.keyboardShortcuts.setActionCallback('organizeScene', () => {
                     if (window.stashUIManager && window.stashUIManager.organizeScene) {
                         window.stashUIManager.organizeScene();
                     }
                 });
-                
+
                 window.keyboardShortcuts.setActionCallback('scrapeStashDB', () => {
                     if (window.stashUIManager && window.stashUIManager.scrapeStashDB) {
                         window.stashUIManager.scrapeStashDB();
                     }
                 });
-                
+
                 window.keyboardShortcuts.setActionCallback('scrapeThePornDB', () => {
                     if (window.stashUIManager && window.stashUIManager.scrapeThePornDB) {
                         window.stashUIManager.scrapeThePornDB();
                     }
                 });
-                
+
                 // Navigation shortcuts
                 window.keyboardShortcuts.setActionCallback('previousScene', () => {
                     const prevButton = document.querySelector('button[title="Previous"]');
                     if (prevButton) prevButton.click();
                 });
-                
+
                 window.keyboardShortcuts.setActionCallback('nextScene', () => {
                     const nextButton = document.querySelector('button[title="Next"]');
                     if (nextButton) nextButton.click();
                 });
-                
+
                 window.keyboardShortcuts.setActionCallback('openEditPanel', () => {
                     const editButton = document.querySelector('a[data-rb-event-key="scene-edit-panel"]');
                     if (editButton) editButton.click();
                 });
-                
+
                 window.keyboardShortcuts.setActionCallback('closeEditPanel', () => {
                     const closeButton = document.querySelector('.edit-panel button.close');
                     if (closeButton) closeButton.click();
                 });
-                
+
                 // Performance shortcuts
                 window.keyboardShortcuts.setActionCallback('togglePerformanceMonitor', () => {
                     const widget = document.getElementById('stash-performance-widget');
@@ -10476,7 +10476,7 @@
                         widget.style.display = widget.style.display === 'none' ? 'block' : 'none';
                     }
                 });
-                
+
                 window.keyboardShortcuts.setActionCallback('toggleDebugMode', () => {
                     if (window.performanceConfigManager) {
                         const debugMode = window.performanceConfigManager.get('debug.enabled');
@@ -10484,21 +10484,21 @@
                         notifications.show(`Debug mode ${!debugMode ? 'enabled' : 'disabled'}`, 'info');
                     }
                 });
-                
+
                 window.keyboardShortcuts.setActionCallback('toggleTheme', () => {
                     if (window.themeManager) {
                         // Get all available theme names
                         const allThemes = window.themeManager.getAllThemes();
                         const themeNames = Object.keys(allThemes).filter(name => name !== 'system');
-                        
+
                         // Get current theme name
                         const currentThemeName = window.themeManager.currentTheme || 'dark';
-                        
+
                         // Find next theme
                         const currentIndex = themeNames.indexOf(currentThemeName);
                         const nextIndex = (currentIndex + 1) % themeNames.length;
                         const nextTheme = themeNames[nextIndex];
-                        
+
                         // Apply the next theme
                         window.themeManager.applyTheme(nextTheme);
                         notifications.show(`Theme changed to ${allThemes[nextTheme].name || nextTheme}`, 'info');
